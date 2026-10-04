@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stremio Dynamic Catalog Preview | TMDB Streaming France</title>
+  <meta name="description" content="Visualiseur et simulateur de catalogues dynamiques Stremio ultra-filtrés avec l'API TMDB pour les nouveautés streaming en France.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Ambient background glow -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-branding">
+        <div class="logo-badge">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        </div>
+        <div>
+          <h1>Stremio Dynamic Catalog Studio</h1>
+          <p class="subtitle">Simulateur & testeur de filtres ultra-précis pour sorties Streaming France</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="connection-status" id="apiStatusBadge">
+          <span class="status-dot"></span>
+          <span id="apiStatusText">Mode Démo actif</span>
+        </div>
+        <button id="toggleConfigBtn" class="btn btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          Paramètres & Clé API
+        </button>
+      </div>
+    </header>
+
+    <!-- API Config Drawer / Panel -->
+    <section class="config-panel" id="configPanel">
+      <div class="panel-inner">
+        <div class="panel-header">
+          <h2>Configuration de l'accès TMDB</h2>
+          <button id="closeConfigBtn" class="close-btn" aria-label="Fermer la configuration">&times;</button>
+        </div>
+        <p class="panel-desc">
+          Renseigne ta clé API TMDB (ou Access Token v4) pour charger les données réelles en direct. Si vide, l'interface tourne sur les données de démonstration réelles pré-enregistrées.
+        </p>
+        <div class="input-group">
+          <label for="apiKeyInput">Clé API TMDB (v3) ou Token Bearer (v4)</label>
+          <div class="input-with-action">
+            <input type="password" id="apiKeyInput" placeholder="Ex: 8a7b9c... ou eyJhbGciOi..." autocomplete="off">
+            <button id="saveApiKeyBtn" class="btn btn-primary">Connecter</button>
+            <button id="clearApiKeyBtn" class="btn btn-outline">Mode Démo</button>
+          </div>
+          <span class="input-hint">Ta clé est stockée localement dans ton navigateur (localStorage) et n'est jamais transmise ailleurs que directement aux serveurs de TMDB.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Controls & Filter Presets -->
+    <section class="controls-card">
+      <!-- Catalog Line Selector (Tabs) -->
+      <div class="catalog-line-selector">
+        <button class="catalog-line-tab active" id="tabCatalogStreaming" data-catalog="streaming_fr">
+          <span class="catalog-icon">⚡</span>
+          <div class="catalog-tab-content">
+            <span class="catalog-tab-title">Ligne 1 : Nouveautés Streaming France (SVOD)</span>
+            <span class="catalog-tab-sub">Abonnements sans surcoût : Netflix, Prime Video, Disney+, Canal+, Max, Apple TV+</span>
+          </div>
+        </button>
+        <button class="catalog-line-tab" id="tabCatalogVod" data-catalog="digital_vod">
+          <span class="catalog-icon">🎬</span>
+          <div class="catalog-tab-content">
+            <span class="catalog-tab-title">Ligne 2 : Nouveautés VOD & Digital (Achat / Location)</span>
+            <span class="catalog-tab-sub">Sorties WEB-DL mondiales (Amazon/Apple US) avec disponibilité audio ou sous-titres FR</span>
+          </div>
+        </button>
+      </div>
+
+      <div class="card-top">
+        <div class="filter-headline">
+          <span class="pill-tag">Règles de filtrage en direct</span>
+          <h2>Sélection du Catalogue</h2>
+        </div>
+        <div class="quick-presets">
+          <button class="preset-btn active" id="presetStrictOriginals" data-preset="strict">
+            <span class="preset-icon" id="presetIconStrict">⚡</span>
+            <div class="preset-text" id="presetTextStrict">
+              <strong id="presetStrictTitle">100% Exclusivités & Direct Streaming</strong>
+              <small id="presetStrictSub">Sortie ciné &le; 2 jours (Netflix Originals, Prime, etc.)</small>
+            </div>
+          </button>
+          <button class="preset-btn" id="presetFreshReleases" data-preset="fresh">
+            <span class="preset-icon" id="presetIconFresh">🍿</span>
+            <div class="preset-text" id="presetTextFresh">
+              <strong id="presetFreshTitle">Nouveautés & Ciné Récent (&lt; 90j)</strong>
+              <small id="presetFreshSub">Direct streaming + sorties ciné très récentes</small>
+            </div>
+          </button>
+          <button class="preset-btn" id="presetAllStreaming" data-preset="all">
+            <span class="preset-icon" id="presetIconAll">📡</span>
+            <div class="preset-text" id="presetTextAll">
+              <strong id="presetAllTitle">Toutes sorties récentes streaming</strong>
+              <small id="presetAllSub">Filtre classique sans élimination des anciens</small>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Advanced Filter Settings Grid -->
+      <div class="filters-grid">
+        <div class="filter-item">
+          <label for="theatricalGapMax" id="theatricalGapLabel">Écart max Sortie Ciné / Streaming</label>
+          <div class="slider-container">
+            <input type="range" id="theatricalGapMax" min="0" max="365" step="15" value="0">
+            <div class="slider-value">
+              <span id="gapDisplay">0 à 2 jours (Strictement exclusif streaming / marge simultanée)</span>
+            </div>
+          </div>
+          <span class="help-text" id="gapHelpText">Si 0 : seuls les films exclusifs streaming (marge de 2j tolérée pour sorties simultanées) sont acceptés.</span>
+        </div>
+
+        <div class="filter-item">
+          <label for="timeWindowSelect" id="timeWindowLabel">Fenêtre de sortie en France</label>
+          <select id="timeWindowSelect" class="custom-select">
+            <option value="30">30 derniers jours</option>
+            <option value="60" selected>60 derniers jours</option>
+            <option value="90">90 derniers jours</option>
+            <option value="180">6 derniers mois</option>
+          </select>
+          <span class="help-text" id="timeWindowHelp">Date d'arrivée sur les plateformes françaises.</span>
+        </div>
+
+        <div class="filter-item" id="providerFilterContainer">
+          <label for="providerFilterSelect" id="providerFilterLabel">Plateformes SVOD France</label>
+          <select id="providerFilterSelect" class="custom-select">
+            <option value="all" selected>Toutes plateformes (Netflix, Prime, Disney+, Canal+, Max...)</option>
+            <option value="8">Netflix uniquement</option>
+            <option value="119">Amazon Prime Video uniquement</option>
+            <option value="337">Disney+ uniquement</option>
+            <option value="381">Canal+ / MyCanal uniquement</option>
+            <option value="350">Apple TV+ uniquement</option>
+            <option value="1899">Max (HBO) uniquement</option>
+            <option value="531">Paramount+ uniquement</option>
+          </select>
+          <span class="help-text" id="providerFilterHelp">Monétisation : type abonnement streaming (flatrate).</span>
+        </div>
+
+        <div class="filter-item">
+          <label for="minRatingInput">Qualité minimale</label>
+          <div class="dual-inputs">
+            <div class="input-sub">
+              <span>Note min :</span>
+              <input type="number" id="minRatingInput" min="0" max="10" step="0.5" value="0">
+            </div>
+            <div class="input-sub">
+              <span>Durée min :</span>
+              <input type="number" id="minRuntimeInput" min="0" max="240" step="5" value="70">
+            </div>
+          </div>
+          <span class="help-text">Durée min : 70 min élimine les shorts, bonus & formats courts.</span>
+        </div>
+
+        <div class="filter-item" style="grid-column: 1 / -1; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.08);">
+          <label style="color: #c4b5fd;">Exclusions Intelligentes & Filtres de Sécurité</label>
+          <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 6px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; color: #f8fafc; font-size: 0.88rem; font-weight: 500;">
+              <input type="checkbox" id="excludeStandupCheckbox" checked style="accent-color: var(--accent-purple); width: 16px; height: 16px;">
+              <span>Exclure <strong>Stand-up & Spectacles</strong></span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; color: #f8fafc; font-size: 0.88rem; font-weight: 500;">
+              <input type="checkbox" id="excludeDocuCheckbox" checked style="accent-color: var(--accent-purple); width: 16px; height: 16px;">
+              <span>Exclure <strong>Documentaires</strong> (Genre 99)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; color: #f8fafc; font-size: 0.88rem; font-weight: 500;">
+              <input type="checkbox" id="excludeTvMoviesCheckbox" checked style="accent-color: var(--accent-purple); width: 16px; height: 16px;">
+              <span>Exclure <strong>Téléfilms & Bêtisiers TV</strong> (TV Movie)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; color: #f8fafc; font-size: 0.88rem; font-weight: 500;">
+              <input type="checkbox" id="mainLanguagesOnlyCheckbox" checked style="accent-color: var(--accent-purple); width: 16px; height: 16px;">
+              <span><strong>Langues courantes uniquement</strong> (FR, EN, ES, IT, DE, JA, KO)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; color: #f8fafc; font-size: 0.88rem; font-weight: 500;">
+              <input type="checkbox" id="frenchLocalizationOnlyCheckbox" checked style="accent-color: var(--accent-purple); width: 16px; height: 16px;">
+              <span><strong>Résumé français obligatoire</strong></span>
+            </label>
+          </div>
+          <span class="help-text" style="color: #94a3b8;">Garantie pureté : élimine les shorts publicitaires, docus, et titres exotiques sans traduction française.</span>
+        </div>
+      </div>
+
+      <div class="card-bottom">
+        <div class="filter-summary" id="filterSummaryText">
+          Règle active : <strong>Direct-to-streaming pur</strong> (Sortie globale = Sortie streaming France).
+        </div>
+        <button id="applyFiltersBtn" class="btn btn-primary pulse-on-hover">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+          Actualiser le catalogue
+        </button>
+      </div>
+    </section>
+
+    <!-- Tabs: Stremio View vs Inspector / Debug View -->
+    <div class="view-tabs">
+      <button class="tab-btn active" id="tabStremioView">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+        Aperçu Rendu Stremio (Ligne Unique)
+      </button>
+      <button class="tab-btn" id="tabDebugView">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 20h9"></path>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+        </svg>
+        Inspecteur de Filtrage (Acceptés vs Rejetés)
+      </button>
+      <div class="stats-pill" id="statsPill">
+        Chargement...
+      </div>
+    </div>
+
+    <!-- VIEW 1: STREMIO CINEMA ROW -->
+    <main class="stremio-viewport" id="stremioViewSection">
+      <div class="stremio-catalog-header">
+        <div class="catalog-title-wrap">
+          <div class="catalog-badge">CATALOGUE STREMIO</div>
+          <h3 id="catalogTitleDisplay">Nouveautés Streaming France (Films Exclusifs)</h3>
+        </div>
+        <div class="catalog-nav-arrows">
+          <button id="scrollLeftBtn" class="nav-arrow" aria-label="Défiler à gauche">&#8592;</button>
+          <button id="scrollRightBtn" class="nav-arrow" aria-label="Défiler à droite">&#8594;</button>
+        </div>
+      </div>
+
+      <!-- Horizontal scrolling track -->
+      <div class="stremio-row-track" id="stremioRowTrack">
+        <!-- Cards injected dynamically via JS -->
+      </div>
+    </main>
+
+    <!-- VIEW 2: INSPECTOR / DEBUG TABLE -->
+    <section class="inspector-section hidden" id="inspectorSection">
+      <div class="inspector-header">
+        <div>
+          <h3>Preuve de filtrage : Analyse comparative des films analysés</h3>
+          <p class="subtitle">Démontre pourquoi les vieux films réintégrés sur Netflix/Prime sont éliminés</p>
+        </div>
+        <div class="inspector-filters">
+          <button class="btn-chip active" id="filterShowAll">Tous (<span id="countTotal">0</span>)</button>
+          <button class="btn-chip success" id="filterShowAccepted">Validés (<span id="countAccepted">0</span>)</button>
+          <button class="btn-chip danger" id="filterShowRejected">Rejetés (<span id="countRejected">0</span>)</button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="inspector-table" id="inspectorTable">
+          <thead>
+            <tr>
+              <th>Film</th>
+              <th>Sortie Mondiale / Ciné</th>
+              <th>Sortie Streaming FR</th>
+              <th>Écart (Jours)</th>
+              <th>Plateforme</th>
+              <th>Statut & Verdict</th>
+            </tr>
+          </thead>
+          <tbody id="inspectorTableBody">
+            <!-- Rows injected dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Stremio Addon Ready-to-Deploy Code Snippet -->
+    <section class="addon-export-card">
+      <div class="export-header">
+        <div>
+          <span class="pill-tag green">Prêt pour Vercel</span>
+          <h3>Format Manifest & Payload Stremio correspondant</h3>
+          <p class="subtitle">Ce que ton addon renverra directement à Stremio en JSON</p>
+        </div>
+        <button id="copyJsonBtn" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copier le JSON Stremio
+        </button>
+      </div>
+      <div class="code-block-wrapper">
+        <pre><code id="jsonOutput" class="code-preview">// Le flux Stremio généré apparaîtra ici...</code></pre>
+      </div>
+    </section>
+
+    <!-- Modal Detail for Movie -->
+    <div class="modal-backdrop" id="movieModal">
+      <div class="modal-content">
+        <button id="closeModalBtn" class="modal-close-btn">&times;</button>
+        <div class="modal-body" id="modalBody">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>Conçu pour <strong>Wayku</strong> • Compatibilité Stremio Addon v3 Protocol & TMDb API Discover v3/v4</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

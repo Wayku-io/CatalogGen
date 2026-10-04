@@ -1,0 +1,19 @@
+{
+  "name": "stremio-streaming-france-addon",
+  "version": "1.0.0",
+  "description": "Addon Stremio dynamique pour les nouveautés et exclusivités streaming en France avec l'API TMDB.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "stremio",
+    "stremio-addon",
+    "tmdb",
+    "streaming",
+    "france"
+  ],
+  "author": "Wayku",
+  "license": "MIT"
+}
