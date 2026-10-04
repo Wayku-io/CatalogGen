@@ -323,7 +323,7 @@ function getPosterUrl(posterPath, title, isOriginal = true) {
 // --- Application State ---
 const state = {
   catalogMode: 'streaming_fr', // 'streaming_fr' (Line 1 SVOD) | 'digital_vod' (Line 2 VOD)
-  apiKey: localStorage.getItem('tmdb_api_key') || '',
+  apiKey: (typeof localStorage !== 'undefined' ? localStorage.getItem('tmdb_api_key') : '') || '',
   isLiveApi: false,
   rawMovies: [],
   processedItems: [],
@@ -343,7 +343,7 @@ const state = {
 };
 
 // --- DOM Elements ---
-const elements = {
+const elements = typeof document !== 'undefined' ? {
   apiKeyInput: document.getElementById('apiKeyInput'),
   saveApiKeyBtn: document.getElementById('saveApiKeyBtn'),
   clearApiKeyBtn: document.getElementById('clearApiKeyBtn'),
@@ -414,7 +414,7 @@ const elements = {
   movieModal: document.getElementById('movieModal'),
   closeModalBtn: document.getElementById('closeModalBtn'),
   modalBody: document.getElementById('modalBody')
-};
+} : {};
 
 // --- Initialization ---
 function init() {
@@ -1400,72 +1400,75 @@ function setInspectorFilter(filter) {
 }
 
 // --- Modal Movie Details ---
-window.openMovieModal = function(movieId) {
-  const movie = state.processedItems.find(m => m.id === movieId);
-  if (!movie) return;
+if (typeof window !== 'undefined') {
+  window.openMovieModal = function(movieId) {
+    const movie = state.processedItems.find(m => m.id === movieId);
+    if (!movie) return;
 
-  const poster = getPosterUrl(movie.poster_path, movie.title);
-  const providerList = movie.providers.map(p => `
-    <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.06);padding:4px 10px;border-radius:6px;margin-right:6px;font-size:0.8rem;">
-      ${p.logo ? `<img src="${p.logo}" style="width:18px;height:18px;border-radius:4px;">` : ''}
-      <span>${p.name}</span>
-    </div>
-  `).join('');
-
-  const statusBadge = state.catalogMode === 'digital_vod'
-    ? '<span class="pill-tag green">🎬 Nouveauté VOD & Digital (Achat / Location)</span>'
-    : (movie.isPureOriginal 
-        ? '<span class="pill-tag green">⚡ Exclusivité / Direct Streaming</span>' 
-        : '<span class="pill-tag" style="background:#0284c7;color:#fff;">🍿 Sortie Ciné Récente</span>');
-
-  elements.modalBody.innerHTML = `
-    <div style="display:flex;gap:20px;flex-wrap:wrap;">
-      <img src="${poster}" style="width:140px;border-radius:10px;object-fit:cover;aspect-ratio:2/3;" alt="${movie.title}">
-      <div style="flex:1;min-width:240px;">
-        <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:6px;">${movie.title}</h2>
-        <div style="font-size:0.85rem;color:#94a3b8;margin-bottom:12px;">
-          Titre original : <em>${movie.original_title}</em> • IMDb : <strong>${movie.imdb_id}</strong>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-          ${statusBadge}
-          <span class="pill-tag">★ ${movie.vote_average} (${movie.vote_count} votes)</span>
-        </div>
-        <div style="margin-bottom:14px;">
-          <div style="font-size:0.8rem;color:#64748b;margin-bottom:4px;">${state.catalogMode === 'digital_vod' ? 'Disponibilité / Magasin VOD :' : 'Plateforme(s) en France :'}</div>
-          ${providerList}
-        </div>
-        ${state.catalogMode === 'digital_vod' ? `
-        <div style="margin-bottom:14px;">
-          <div style="font-size:0.8rem;color:#64748b;margin-bottom:4px;">Disponibilité FR (Audio / Sous-titres) :</div>
-          <span class="pill-tag ${movie.hasFrenchAvailability ? 'green' : 'amber'}">${movie.hasFrenchAvailability ? '✓ Piste audio ou sous-titres FR détectés' : '⚠ Non confirmée'}</span>
-        </div>
-        ` : ''}
+    const poster = getPosterUrl(movie.poster_path, movie.title);
+    const providerList = movie.providers.map(p => `
+      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.06);padding:4px 10px;border-radius:6px;margin-right:6px;font-size:0.8rem;">
+        ${p.logo ? `<img src="${p.logo}" style="width:18px;height:18px;border-radius:4px;">` : ''}
+        <span>${p.name}</span>
       </div>
-    </div>
-    <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
-      <h4 style="font-size:0.9rem;margin-bottom:6px;color:#cbd5e1;">Synopsis :</h4>
-      <p style="font-size:0.88rem;color:#94a3b8;line-height:1.6;">${movie.overview || 'Sortie VOD & Digital mondiale (Achat / Location - Piste ou sous-titres FR disponibles).'}</p>
-    </div>
-    <div style="margin-top:20px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-size:0.82rem;">
-      <div>
-        <div style="color:#64748b;">Sortie Mondiale / Ciné : <strong>${movie.earliest_theatrical_date || 'Direct Digital'}</strong></div>
-        <div style="color:#38bdf8;">Arrivée VOD / Digital : <strong>${movie.france_digital_date}</strong></div>
-      </div>
-      <div style="text-align:right;">
-        <div style="color:#64748b;">Écart constaté :</div>
-        <strong style="color:${movie.gapDays <= 2 ? '#10b981' : '#f59e0b'};font-size:1rem;">${movie.gapDays} jour${movie.gapDays > 1 ? 's' : ''} ${movie.gapDays > 0 && movie.gapDays <= 2 ? '(Sortie simultanée)' : ''}</strong>
-      </div>
-    </div>
-  `;
+    `).join('');
 
-  elements.movieModal.classList.add('open');
-};
+    const statusBadge = state.catalogMode === 'digital_vod'
+      ? '<span class="pill-tag green">🎬 Nouveauté VOD & Digital (Achat / Location)</span>'
+      : (movie.isPureOriginal 
+          ? '<span class="pill-tag green">⚡ Exclusivité / Direct Streaming</span>' 
+          : '<span class="pill-tag" style="background:#0284c7;color:#fff;">🍿 Sortie Ciné Récente</span>');
+
+    elements.modalBody.innerHTML = `
+      <div style="display:flex;gap:20px;flex-wrap:wrap;">
+        <img src="${poster}" style="width:140px;border-radius:10px;object-fit:cover;aspect-ratio:2/3;" alt="${movie.title}">
+        <div style="flex:1;min-width:240px;">
+          <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:6px;">${movie.title}</h2>
+          <div style="font-size:0.85rem;color:#94a3b8;margin-bottom:12px;">
+            Titre original : <em>${movie.original_title}</em> • IMDb : <strong>${movie.imdb_id}</strong>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            ${statusBadge}
+            <span class="pill-tag">★ ${movie.vote_average} (${movie.vote_count} votes)</span>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div style="font-size:0.8rem;color:#64748b;margin-bottom:4px;">${state.catalogMode === 'digital_vod' ? 'Disponibilité / Magasin VOD :' : 'Plateforme(s) en France :'}</div>
+            ${providerList}
+          </div>
+          ${state.catalogMode === 'digital_vod' ? `
+          <div style="margin-bottom:14px;">
+            <div style="font-size:0.8rem;color:#64748b;margin-bottom:4px;">Disponibilité FR (Audio / Sous-titres) :</div>
+            <span class="pill-tag ${movie.hasFrenchAvailability ? 'green' : 'amber'}">${movie.hasFrenchAvailability ? '✓ Piste audio ou sous-titres FR détectés' : '⚠ Non confirmée'}</span>
+          </div>
+          ` : ''}
+        </div>
+      </div>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
+        <h4 style="font-size:0.9rem;margin-bottom:6px;color:#cbd5e1;">Synopsis :</h4>
+        <p style="font-size:0.88rem;color:#94a3b8;line-height:1.6;">${movie.overview || 'Sortie VOD & Digital mondiale (Achat / Location - Piste ou sous-titres FR disponibles).'}</p>
+      </div>
+      <div style="margin-top:20px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-size:0.82rem;">
+        <div>
+          <div style="color:#64748b;">Sortie Mondiale / Ciné : <strong>${movie.earliest_theatrical_date || 'Direct Digital'}</strong></div>
+          <div style="color:#38bdf8;">Arrivée VOD / Digital : <strong>${movie.france_digital_date}</strong></div>
+        </div>
+        <div style="text-align:right;">
+          <div style="color:#64748b;">Écart constaté :</div>
+          <strong style="color:${movie.gapDays <= 2 ? '#10b981' : '#f59e0b'};font-size:1rem;">${movie.gapDays} jour${movie.gapDays > 1 ? 's' : ''} ${movie.gapDays > 0 && movie.gapDays <= 2 ? '(Sortie simultanée)' : ''}</strong>
+        </div>
+      </div>
+    `;
+
+    elements.movieModal.classList.add('open');
+  };
+}
 
 function closeModal() {
-  elements.movieModal.classList.remove('open');
+  if (elements.movieModal) elements.movieModal.classList.remove('open');
 }
 
 function copyStremioJson() {
+  if (!elements.jsonOutput || !elements.copyJsonBtn) return;
   const code = elements.jsonOutput.textContent;
   navigator.clipboard.writeText(code).then(() => {
     const originalText = elements.copyJsonBtn.innerHTML;
@@ -1477,4 +1480,6 @@ function copyStremioJson() {
 }
 
 // Start
-document.addEventListener('DOMContentLoaded', init);
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', init);
+}

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = 3456;
-const PUBLIC_DIR = __dirname;
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -16,11 +16,9 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
-  // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
 
-  // Response helpers for Vercel Serverless Function compatibility
   res.status = function(code) {
     this.statusCode = code;
     return this;
@@ -30,16 +28,14 @@ const server = http.createServer((req, res) => {
     this.end(JSON.stringify(data));
   };
 
-  const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost:3456'}`);
   const pathname = urlObj.pathname;
 
-  // Stremio Manifest endpoint
   if (pathname === '/manifest.json') {
-    const manifestHandler = require('./api/manifest.js');
+    const manifestHandler = require('../api/manifest.js');
     return manifestHandler(req, res);
   }
 
-  // Stremio Catalog endpoint
   if (pathname.startsWith('/catalog/')) {
     const cleanPath = pathname.replace(/^\/catalog\//, '').replace(/\.json$/, '');
     const parts = cleanPath.split('/');
@@ -52,7 +48,7 @@ const server = http.createServer((req, res) => {
     req.query.id = id;
     if (extra) req.query.extra = extra;
 
-    const catalogHandler = require('./api/catalog.js');
+    const catalogHandler = require('../api/catalog.js');
     return catalogHandler(req, res);
   }
 
