@@ -1,11 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "outputDirectory": "public",
   "rewrites": [
-    {
-      "source": "/",
-      "destination": "/index.html"
-    },
     {
       "source": "/catalog/:type/:id.json",
       "destination": "/api/catalog.js?type=:type&id=:id"
