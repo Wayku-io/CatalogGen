@@ -1,10 +1,16 @@
-module.exports = (req, res) => {
-  // CORS Headers for Stremio Web and Desktop
+function sendResponse(res, statusCode, data) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', '*');
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+  if (typeof res.status === 'function' && typeof res.json === 'function') {
+    return res.status(statusCode).json(data);
+  }
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(data));
+}
 
+module.exports = (req, res) => {
   const manifest = {
     id: "org.wayku.tmdbstreamingfrance",
     version: "2.0.0",
@@ -65,5 +71,5 @@ module.exports = (req, res) => {
     ]
   };
 
-  res.status(200).json(manifest);
+  sendResponse(res, 200, manifest);
 };

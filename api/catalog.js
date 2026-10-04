@@ -37,6 +37,17 @@ const STANDUP_PATTERNS = [
 
 const MAIN_LANGUAGES = ['fr', 'en', 'es', 'it', 'de', 'ja', 'ko'];
 
+function sendResponse(res, statusCode, data) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  if (typeof res.status === 'function' && typeof res.json === 'function') {
+    return res.status(statusCode).json(data);
+  }
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(data));
+}
+
 module.exports = async (req, res) => {
   // CORS Headers required by Stremio
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -45,26 +56,26 @@ module.exports = async (req, res) => {
   // Edge Cache: 1h fresh, 4h edge cache, 24h stale-while-revalidate
   res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=14400, stale-while-revalidate=86400');
 
-  const apiKey = process.env.TMDB_API_KEY || req.query.api_key;
+  const apiKey = process.env.TMDB_API_KEY || (req.query && req.query.api_key);
   if (!apiKey) {
-    return res.status(200).json({
+    return sendResponse(res, 200, {
       metas: [],
       error: "TMDB_API_KEY non configurée dans les variables d'environnement Vercel (ou paramètre ?api_key= manquant)."
     });
   }
 
   try {
-    const { type, id, extra } = req.query;
+    const { type, id, extra } = req.query || {};
 
     if (type !== 'movie') {
-      return res.status(200).json({ metas: [] });
+      return sendResponse(res, 200, { metas: [] });
     }
 
     const isCatalogStreaming = id === 'streaming_fr_originals';
     const isCatalogVod = id === 'digital_vod_worldwide';
 
     if (!isCatalogStreaming && !isCatalogVod) {
-      return res.status(200).json({ metas: [] });
+      return sendResponse(res, 200, { metas: [] });
     }
 
     // Parse extra parameters (genre filter, skip pagination)
@@ -281,9 +292,9 @@ module.exports = async (req, res) => {
       .sort((a, b) => b._sortDate.localeCompare(a._sortDate))
       .map(({ _sortDate, ...meta }) => meta);
 
-    return res.status(200).json({ metas: validMetas });
+    return sendResponse(res, 200, { metas: validMetas });
   } catch (error) {
     console.error("Erreur Catalog:", error);
-    return res.status(500).json({ metas: [], error: error.message });
+    return sendResponse(res, 500, { metas: [], error: error.message });
   }
 };
