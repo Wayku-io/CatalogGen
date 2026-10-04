@@ -443,14 +443,18 @@ function setupEventListeners() {
   elements.saveApiKeyBtn.addEventListener('click', () => {
     const key = elements.apiKeyInput.value.trim();
     if (key) {
-      localStorage.setItem('tmdb_api_key', key);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('tmdb_api_key', key);
+      }
       state.apiKey = key;
       validateAndConnectApiKey(key);
     }
   });
 
   elements.clearApiKeyBtn.addEventListener('click', () => {
-    localStorage.removeItem('tmdb_api_key');
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('tmdb_api_key');
+    }
     state.apiKey = '';
     elements.apiKeyInput.value = '';
     setDemoMode();

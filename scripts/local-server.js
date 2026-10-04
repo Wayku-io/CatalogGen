@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = 3456;
-const ROOT_DIR = path.join(__dirname, '..');
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -32,7 +32,7 @@ const server = http.createServer((req, res) => {
   const pathname = urlObj.pathname;
 
   if (pathname === '/manifest.json') {
-    const manifestPath = path.join(ROOT_DIR, 'manifest.json');
+    const manifestPath = path.join(PUBLIC_DIR, 'manifest.json');
     if (fs.existsSync(manifestPath)) {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return fs.createReadStream(manifestPath).pipe(res);
@@ -57,7 +57,7 @@ const server = http.createServer((req, res) => {
     return catalogHandler(req, res);
   }
 
-  let filePath = path.join(ROOT_DIR, pathname === '/' ? 'index.html' : pathname);
+  let filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
