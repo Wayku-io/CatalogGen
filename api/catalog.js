@@ -38,24 +38,15 @@ const STANDUP_PATTERNS = [
 const MAIN_LANGUAGES = ['fr', 'en', 'es', 'it', 'de', 'ja', 'ko'];
 
 function sendResponse(res, statusCode, data) {
+  res.statusCode = statusCode;
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', '*');
-  if (typeof res.status === 'function' && typeof res.json === 'function') {
-    return res.status(statusCode).json(data);
-  }
-  res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=14400, stale-while-revalidate=86400');
   res.end(JSON.stringify(data));
 }
 
-module.exports = async (req, res) => {
-  // CORS Headers required by Stremio
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  // Edge Cache: 1h fresh, 4h edge cache, 24h stale-while-revalidate
-  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=14400, stale-while-revalidate=86400');
-
+async function handler(req, res) {
   const apiKey = process.env.TMDB_API_KEY || (req.query && req.query.api_key);
   if (!apiKey) {
     return sendResponse(res, 200, {
@@ -71,8 +62,9 @@ module.exports = async (req, res) => {
       return sendResponse(res, 200, { metas: [] });
     }
 
-    const isCatalogStreaming = id === 'streaming_fr_originals';
-    const isCatalogVod = id === 'digital_vod_worldwide';
+    const cleanId = (id || '').replace(/\.json$/, '');
+    const isCatalogStreaming = cleanId === 'streaming_fr_originals';
+    const isCatalogVod = cleanId === 'digital_vod_worldwide';
 
     if (!isCatalogStreaming && !isCatalogVod) {
       return sendResponse(res, 200, { metas: [] });
@@ -111,7 +103,7 @@ module.exports = async (req, res) => {
     let discoverUrl = '';
 
     if (isCatalogStreaming) {
-      // LINE 1: Pure French Streaming Subscriptions (flatrate) - Restored exact release_date.desc behavior
+      // LINE 1: Pure French Streaming Subscriptions (flatrate)
       discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}`;
       
       const providerKey = selectedExtraOption.toLowerCase();
@@ -120,7 +112,6 @@ module.exports = async (req, res) => {
       }
     } else {
       // LINE 2: Worldwide Digital & VOD Releases (Type 4)
-      // Note: TMDB with_release_type=4 strictly requires the region parameter (US has 99% of global digital drops)
       discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=popularity.desc&page=${page}`;
 
       const genreKey = selectedExtraOption.toLowerCase();
@@ -129,16 +120,21 @@ module.exports = async (req, res) => {
       }
     }
 
-    const tmdbRes = await fetch(discoverUrl, { headers });
+    const tmdbRes = await fetch(discoverUrl, { headers, signal: AbortSignal.timeout(4000) });
+    if (!tmdbRes.ok) {
+      return sendResponse(res, 200, { metas: [] });
+    }
+
     const data = await tmdbRes.json();
     const results = data.results || [];
 
-    // Enrich and filter items (up to 35 candidates for rich Stremio rows)
+    // Enrich and filter items (20 candidates per page for fast execution)
     const enriched = await Promise.all(
-      results.slice(0, 35).map(async (m) => {
+      results.slice(0, 20).map(async (m) => {
         try {
           const detailUrl = `https://api.themoviedb.org/3/movie/${m.id}?${keyParam}append_to_response=release_dates,watch/providers,external_ids,keywords,credits,translations&language=fr-FR`;
-          const detailRes = await fetch(detailUrl, { headers });
+          const detailRes = await fetch(detailUrl, { headers, signal: AbortSignal.timeout(3000) });
+          if (!detailRes.ok) return null;
           const detail = await detailRes.json();
 
           // Exclude documentaries (genre 99)
@@ -289,12 +285,15 @@ module.exports = async (req, res) => {
     // Sort valid metas chronologically (most recent digital release first on the left of Stremio row)
     const validMetas = enriched
       .filter(Boolean)
-      .sort((a, b) => b._sortDate.localeCompare(a._sortDate))
+      .sort((a, b) => (b._sortDate || '').localeCompare(a._sortDate || ''))
       .map(({ _sortDate, ...meta }) => meta);
 
     return sendResponse(res, 200, { metas: validMetas });
   } catch (error) {
     console.error("Erreur Catalog:", error);
-    return sendResponse(res, 500, { metas: [], error: error.message });
+    return sendResponse(res, 200, { metas: [] });
   }
-};
+}
+
+module.exports = handler;
+module.exports.default = handler;

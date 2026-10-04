@@ -3,12 +3,20 @@
   "outputDirectory": "public",
   "rewrites": [
     {
-      "source": "/catalog/:type/:id/:extra*",
-      "destination": "/api/catalog?type=:type&id=:id&extra=:extra*"
+      "source": "/",
+      "destination": "/index.html"
     },
     {
       "source": "/catalog/:type/:id.json",
-      "destination": "/api/catalog?type=:type&id=:id"
+      "destination": "/api/catalog.js?type=:type&id=:id"
+    },
+    {
+      "source": "/catalog/:type/:id/:extra*.json",
+      "destination": "/api/catalog.js?type=:type&id=:id&extra=:extra*"
+    },
+    {
+      "source": "/catalog/:type/:id/:extra*",
+      "destination": "/api/catalog.js?type=:type&id=:id&extra=:extra*"
     }
   ],
   "headers": [
