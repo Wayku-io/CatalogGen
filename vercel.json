@@ -3,10 +3,6 @@
   "outputDirectory": "public",
   "rewrites": [
     {
-      "source": "/manifest.json",
-      "destination": "/manifest.json"
-    },
-    {
       "source": "/catalog/:type/:id.json",
       "destination": "/api/catalog?type=:type&id=:id"
     },
