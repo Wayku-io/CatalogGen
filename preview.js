@@ -382,7 +382,7 @@ async function loadRow1() {
       })
     );
 
-    const valid = enriched.filter(Boolean);
+    const valid = enriched.filter(Boolean).sort((a, b) => (b.releaseDate || b.year || "").localeCompare(a.releaseDate || a.year || ""));
     studioState.row1.movies = valid;
     renderTrack('track-row-1', valid);
     if (counter) counter.textContent = `${valid.length} films`;
@@ -487,6 +487,13 @@ async function loadRow2() {
           if (frFlatrate.length > 0) return null;
 
           // Écart cinéma
+          // Rejet des films sortis en salles il y a plus de 1 an
+          const primaryYear = parseInt((detail.release_date || '').substring(0, 4), 10);
+          const currentYear = new Date().getFullYear();
+          if (primaryYear && primaryYear < (currentYear - 1)) {
+            return null;
+          }
+
           const allCountries = detail.release_dates?.results || [];
           let earliestTheatrical = null;
           let digitalDate = null;
@@ -536,7 +543,7 @@ async function loadRow2() {
       })
     );
 
-    const valid = enriched.filter(Boolean);
+    const valid = enriched.filter(Boolean).sort((a, b) => (b.releaseDate || b.year || "").localeCompare(a.releaseDate || a.year || ""));
     studioState.row2.movies = valid;
     renderTrack('track-row-2', valid);
     if (counter) counter.textContent = `${valid.length} films`;

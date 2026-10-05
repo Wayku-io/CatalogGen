@@ -203,6 +203,13 @@ async function handler(req, res) {
             }
           }
 
+          // Rejet des films sortis il y a plus de 1 an
+          const primaryYear = parseInt((detail.release_date || '').substring(0, 4), 10);
+          const currentYear = new Date().getFullYear();
+          if (primaryYear && primaryYear < (currentYear - 1)) {
+            return null;
+          }
+
           const allCountries = detail.release_dates?.results || [];
           let earliestCommercialTheatrical = null;
           let earliestAnyTheatrical = null;
