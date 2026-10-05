@@ -33,7 +33,7 @@ const studioState = {
   },
   row2: {
     timeWindow: 60,
-    theatricalGap: 120,
+    theatricalGap: 180,
     genre: '',
     movies: [],
     loading: false
@@ -247,7 +247,6 @@ async function loadRow1() {
   track.innerHTML = '<div class="track-loading">Chargement des films SVOD France...</div>';
 
   if (!studioState.apiKey) {
-    // Mode démo si pas de clé
     renderDemoRow1();
     return;
   }
@@ -264,19 +263,17 @@ async function loadRow1() {
     const headers = isBearer ? { 'Authorization': `Bearer ${studioState.apiKey}` } : {};
     const keyParam = isBearer ? '' : `api_key=${studioState.apiKey}&`;
 
-    let url = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=1`;
+    let baseUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc`;
 
     if (studioState.row1.provider) {
-      url += `&with_watch_providers=${studioState.row1.provider}`;
+      baseUrl += `&with_watch_providers=${studioState.row1.provider}`;
     }
 
-    // Calculer le nombre de pages à scanner selon la fenêtre temporelle demandée :
-    // 30 jours = 3 pages (60 films), 60 jours = 5 pages (100 films), 90 jours = 7 pages (140 films), 180 jours = 12 pages (240 films)
-    const maxPages = studioState.row1.timeWindow >= 180 ? 12 : (studioState.row1.timeWindow >= 90 ? 7 : (studioState.row1.timeWindow >= 60 ? 5 : 3));
+    const maxPages = studioState.row1.timeWindow >= 180 ? 12 : (studioState.row1.timeWindow >= 90 ? 8 : (studioState.row1.timeWindow >= 60 ? 6 : 4));
     const pagesToFetch = Array.from({ length: maxPages }, (_, i) => i + 1);
 
     const pagePromises = pagesToFetch.map(p => {
-      const pUrl = url.replace(/&page=\d+/, `&page=${p}`);
+      const pUrl = `${baseUrl}&page=${p}`;
       return fetch(pUrl, { headers }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
     });
 
@@ -290,7 +287,6 @@ async function loadRow1() {
 
     const candidates = Array.from(candidateMap.values());
 
-    // Enrichissement et filtrage expert (parallélisé sur tous les candidats)
     const enriched = await Promise.all(
       candidates.map(async (m) => {
         try {
@@ -321,26 +317,24 @@ async function loadRow1() {
           const lang = (detail.original_language || '').toLowerCase();
           if (lang && !MAIN_LANGUAGES.includes(lang)) return null;
 
-          // Synopsis français obligatoire
-          if (!detail.overview || detail.overview.trim().length < 20) return null;
-
-          // Studio original
-          const companies = detail.production_companies || [];
-          const isStudioOriginal = companies.some(c => 
-            ORIGINAL_STUDIO_KEYWORDS.some(kw => (c.name || '').toLowerCase().includes(kw))
-          );
+          // Exclusion des films trop anciens (> 1 an)
+          const primaryYear = parseInt((detail.release_date || '').substring(0, 4), 10);
+          const currentYear = new Date().getFullYear();
+          if (primaryYear && primaryYear < (currentYear - 1)) {
+            return null;
+          }
 
           // Dates de sortie
           const allCountries = detail.release_dates?.results || [];
-          let earliestTheatrical = null;
+          let earliestCommercialTheatrical = null;
           let digitalDate = null;
 
           allCountries.forEach(country => {
             country.release_dates.forEach(rd => {
               const d = rd.release_date ? rd.release_date.split('T')[0] : null;
               if (!d) return;
-              if (rd.type === 2 || rd.type === 3) {
-                if (!earliestTheatrical || d < earliestTheatrical) earliestTheatrical = d;
+              if (rd.type === 3) {
+                if (!earliestCommercialTheatrical || d < earliestCommercialTheatrical) earliestCommercialTheatrical = d;
               }
               if (rd.type === 4) {
                 if (country.iso_3166_1 === 'FR') digitalDate = d;
@@ -349,15 +343,26 @@ async function loadRow1() {
             });
           });
 
-          // Écart cinéma
-          if (earliestTheatrical) {
-            const tDate = new Date(earliestTheatrical);
+          // Écart cinéma commercial (tolérance SVOD)
+          if (earliestCommercialTheatrical) {
+            const tDate = new Date(earliestCommercialTheatrical);
             const dDate = new Date(digitalDate || detail.release_date);
             const diffDays = Math.round((dDate - tDate) / (1000 * 60 * 60 * 24));
             if (diffDays > studioState.row1.theatricalGap) return null;
           }
 
           const providerData = detail['watch/providers']?.results?.FR?.flatrate || [];
+          if (providerData.length === 0) return null;
+
+          const finalReleaseDate = digitalDate || detail.release_date || '';
+          if (!finalReleaseDate) return null;
+
+          // Filtrage temporel strict sur la date réelle
+          const rDate = new Date(finalReleaseDate);
+          const diffDaysToToday = Math.round((today - rDate) / (1000 * 60 * 60 * 24));
+          if (diffDaysToToday < -2 || diffDaysToToday > studioState.row1.timeWindow) {
+            return null;
+          }
 
           return {
             id: detail.id,
@@ -366,15 +371,15 @@ async function loadRow1() {
             originalTitle: detail.original_title,
             poster: detail.poster_path ? `https://image.tmdb.org/t/p/w500${detail.poster_path}` : 'https://placehold.co/300x450/1e293b/94a3b8?text=Sans+Affiche',
             backdrop: detail.backdrop_path ? `https://image.tmdb.org/t/p/w1280${detail.backdrop_path}` : '',
-            year: (digitalDate || detail.release_date || '2026').substring(0, 4),
+            year: finalReleaseDate.substring(0, 4) || '2026',
             rating: detail.vote_average ? detail.vote_average.toFixed(1) : 'NR',
             runtime: detail.runtime ? `${detail.runtime} min` : '',
-            overview: detail.overview,
+            overview: detail.overview || 'Sortie SVOD France.',
             providers: providerData.map(p => ({
               name: p.provider_name,
               logo: `https://image.tmdb.org/t/p/original${p.logo_path}`
             })),
-            releaseDate: digitalDate || detail.release_date || ''
+            releaseDate: finalReleaseDate
           };
         } catch (e) {
           return null;
@@ -382,7 +387,10 @@ async function loadRow1() {
       })
     );
 
-    const valid = enriched.filter(Boolean).sort((a, b) => (b.releaseDate || b.year || "").localeCompare(a.releaseDate || a.year || ""));
+    const valid = enriched
+      .filter(Boolean)
+      .sort((a, b) => (b.releaseDate || b.year || '').localeCompare(a.releaseDate || a.year || ''));
+
     studioState.row1.movies = valid;
     renderTrack('track-row-1', valid);
     if (counter) counter.textContent = `${valid.length} films`;
@@ -418,23 +426,24 @@ async function loadRow2() {
     const headers = isBearer ? { 'Authorization': `Bearer ${studioState.apiKey}` } : {};
     const keyParam = isBearer ? '' : `api_key=${studioState.apiKey}&`;
 
-    let url = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=1`;
+    const genreParam = studioState.row2.genre ? `&with_genres=${studioState.row2.genre}` : '';
 
-    if (studioState.row2.genre) {
-      url += `&with_genres=${studioState.row2.genre}`;
+    // Découverte multi-régions (US pour les sorties mondiales WEB-DL + FR pour les sorties VOD locales)
+    const pagesUS = studioState.row2.timeWindow >= 180 ? 12 : (studioState.row2.timeWindow >= 90 ? 8 : (studioState.row2.timeWindow >= 60 ? 6 : 5));
+    const pagesFR = studioState.row2.timeWindow >= 180 ? 8 : (studioState.row2.timeWindow >= 90 ? 6 : (studioState.row2.timeWindow >= 60 ? 4 : 3));
+
+    const queries = [];
+    for (let p = 1; p <= pagesUS; p++) {
+      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${p}${genreParam}`);
+    }
+    for (let p = 1; p <= pagesFR; p++) {
+      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=FR&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${p}${genreParam}`);
     }
 
-    // Calculer le nombre de pages à scanner selon la fenêtre temporelle demandée :
-    // 30 jours = 4 pages (80 films), 60 jours = 7 pages (140 films), 90 jours = 10 pages (200 films), 180 jours = 15 pages (300 films)
-    const maxPages = studioState.row2.timeWindow >= 180 ? 15 : (studioState.row2.timeWindow >= 90 ? 10 : (studioState.row2.timeWindow >= 60 ? 7 : 4));
-    const pagesToFetch = Array.from({ length: maxPages }, (_, i) => i + 1);
+    const pageResults = await Promise.all(
+      queries.map(q => fetch(q, { headers }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })))
+    );
 
-    const pagePromises = pagesToFetch.map(p => {
-      const pUrl = url.replace(/&page=\d+/, `&page=${p}`);
-      return fetch(pUrl, { headers }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
-    });
-
-    const pageResults = await Promise.all(pagePromises);
     const candidateMap = new Map();
     pageResults.forEach(pr => {
       (pr.results || []).forEach(item => {
@@ -471,14 +480,18 @@ async function loadRow2() {
           if (isStandup) return null;
           if (detail.runtime && detail.runtime < 70) return null;
 
-          // Vérification de la disponibilité française (VOD FR)
+          // Disponibilité française
           const translations = detail.translations?.translations || [];
           const hasFrTranslation = translations.some(t => t.iso_639_1 === 'fr');
           const hasFrAudio = (detail.spoken_languages || []).some(l => l.iso_639_1 === 'fr');
           const isFrOriginal = (detail.original_language || '').toLowerCase() === 'fr';
           const hasFrOverview = detail.overview && detail.overview.trim().length > 20;
+          const hasFrTitle = detail.title && detail.original_title && detail.title.toLowerCase() !== detail.original_title.toLowerCase();
+          const isMajorStudio = (detail.production_companies || []).some(c => 
+            ['warner', 'sony', 'universal', 'paramount', 'disney', 'lionsgate', 'mgm', '20th century'].some(st => (c.name || '').toLowerCase().includes(st))
+          );
 
-          if (!hasFrTranslation && !hasFrAudio && !isFrOriginal && !hasFrOverview) {
+          if (!hasFrTranslation && !hasFrAudio && !isFrOriginal && !hasFrOverview && !hasFrTitle && !(isMajorStudio && (detail.original_language || '').toLowerCase() === 'en')) {
             return null;
           }
 
@@ -486,7 +499,6 @@ async function loadRow2() {
           const frFlatrate = detail['watch/providers']?.results?.FR?.flatrate || [];
           if (frFlatrate.length > 0) return null;
 
-          // Écart cinéma
           // Rejet des films sortis en salles il y a plus de 1 an
           const primaryYear = parseInt((detail.release_date || '').substring(0, 4), 10);
           const currentYear = new Date().getFullYear();
@@ -494,20 +506,29 @@ async function loadRow2() {
             return null;
           }
 
+          // Analyse précise des dates
           const allCountries = detail.release_dates?.results || [];
-          let earliestTheatrical = null;
+          let earliestCommercialTheatrical = null;
           let digitalDate = null;
 
           allCountries.forEach(country => {
             country.release_dates.forEach(rd => {
               const d = rd.release_date ? rd.release_date.split('T')[0] : null;
               if (!d) return;
-              if (rd.type === 2 || rd.type === 3) {
-                if (!earliestTheatrical || d < earliestTheatrical) earliestTheatrical = d;
+
+              // Sortie cinéma commerciale uniquement (type 3)
+              if (rd.type === 3) {
+                if (!earliestCommercialTheatrical || d < earliestCommercialTheatrical) {
+                  earliestCommercialTheatrical = d;
+                }
               }
+
+              // Sortie VOD / Digital (type 4)
               if (rd.type === 4) {
-                if (country.iso_3166_1 === 'US' || country.iso_3166_1 === 'FR') {
-                  if (!digitalDate) digitalDate = d;
+                if (country.iso_3166_1 === 'FR') {
+                  digitalDate = d;
+                } else if (country.iso_3166_1 === 'US' && (!digitalDate || country.iso_3166_1 !== 'FR')) {
+                  digitalDate = d;
                 } else if (!digitalDate) {
                   digitalDate = d;
                 }
@@ -515,11 +536,22 @@ async function loadRow2() {
             });
           });
 
-          if (earliestTheatrical) {
-            const tDate = new Date(earliestTheatrical);
-            const dDate = new Date(digitalDate || detail.release_date);
+          // Écart cinéma commercial vs digital (avec la tolérance choisie par l'utilisateur)
+          if (earliestCommercialTheatrical && digitalDate) {
+            const tDate = new Date(earliestCommercialTheatrical);
+            const dDate = new Date(digitalDate);
             const diffDays = Math.round((dDate - tDate) / (1000 * 60 * 60 * 24));
             if (diffDays > studioState.row2.theatricalGap) return null;
+          }
+
+          const finalReleaseDate = digitalDate || detail.release_date || '';
+          if (!finalReleaseDate) return null;
+
+          // Filtrage temporel strict sur la date réelle
+          const rDate = new Date(finalReleaseDate);
+          const diffDaysToToday = Math.round((today - rDate) / (1000 * 60 * 60 * 24));
+          if (diffDaysToToday < -2 || diffDaysToToday > studioState.row2.timeWindow) {
+            return null;
           }
 
           return {
@@ -529,13 +561,13 @@ async function loadRow2() {
             originalTitle: detail.original_title,
             poster: detail.poster_path ? `https://image.tmdb.org/t/p/w500${detail.poster_path}` : 'https://placehold.co/300x450/1e293b/94a3b8?text=Sans+Affiche',
             backdrop: detail.backdrop_path ? `https://image.tmdb.org/t/p/w1280${detail.backdrop_path}` : '',
-            year: (digitalDate || detail.release_date || '2026').substring(0, 4),
+            year: finalReleaseDate.substring(0, 4) || '2026',
             rating: detail.vote_average ? detail.vote_average.toFixed(1) : 'NR',
             runtime: detail.runtime ? `${detail.runtime} min` : '',
             overview: detail.overview || 'Sortie VOD & Digital (Piste ou sous-titres FR disponibles).',
             providers: [],
             isVod: true,
-            releaseDate: digitalDate || detail.release_date || ''
+            releaseDate: finalReleaseDate
           };
         } catch (e) {
           return null;
@@ -543,7 +575,10 @@ async function loadRow2() {
       })
     );
 
-    const valid = enriched.filter(Boolean).sort((a, b) => (b.releaseDate || b.year || "").localeCompare(a.releaseDate || a.year || ""));
+    const valid = enriched
+      .filter(Boolean)
+      .sort((a, b) => (b.releaseDate || b.year || '').localeCompare(a.releaseDate || a.year || ''));
+
     studioState.row2.movies = valid;
     renderTrack('track-row-2', valid);
     if (counter) counter.textContent = `${valid.length} films`;
@@ -552,7 +587,6 @@ async function loadRow2() {
   }
 }
 
-// =============================================================================
 // 8. RENDU DES AFFICHES (Stremio Cards) & MODAL FILM
 // =============================================================================
 function renderTrack(containerId, movies) {

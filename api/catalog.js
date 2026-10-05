@@ -100,33 +100,37 @@ async function handler(req, res) {
     const headers = isBearer ? { 'Authorization': `Bearer ${apiKey}` } : {};
     const keyParam = isBearer ? '' : `api_key=${apiKey}&`;
 
-    let discoverUrl = '';
+    let results = [];
 
     if (isCatalogStreaming) {
       // LINE 1: Pure French Streaming Subscriptions (flatrate)
-      discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}`;
-      
+      let discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}`;
       const providerKey = selectedExtraOption.toLowerCase();
       if (PROVIDER_IDS[providerKey]) {
         discoverUrl += `&with_watch_providers=${PROVIDER_IDS[providerKey]}`;
       }
-    } else {
-      // LINE 2: Worldwide Digital & VOD Releases (Type 4)
-      discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}`;
-
-      const genreKey = selectedExtraOption.toLowerCase();
-      if (GENRE_MAP[genreKey]) {
-        discoverUrl += `&with_genres=${GENRE_MAP[genreKey]}`;
+      const tmdbRes = await fetch(discoverUrl, { headers, signal: AbortSignal.timeout(4000) });
+      if (tmdbRes.ok) {
+        const data = await tmdbRes.json();
+        results = data.results || [];
       }
-    }
+    } else {
+      // LINE 2: Worldwide Digital & VOD Releases (Type 4) multi-régions (US + FR)
+      const genreKey = selectedExtraOption.toLowerCase();
+      const genreParam = GENRE_MAP[genreKey] ? `&with_genres=${GENRE_MAP[genreKey]}` : '';
+      const urlUS = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}${genreParam}`;
+      const urlFR = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=FR&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}${genreParam}`;
 
-    const tmdbRes = await fetch(discoverUrl, { headers, signal: AbortSignal.timeout(4000) });
-    if (!tmdbRes.ok) {
-      return sendResponse(res, 200, { metas: [] });
-    }
+      const [resUS, resFR] = await Promise.all([
+        fetch(urlUS, { headers, signal: AbortSignal.timeout(4000) }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
+        fetch(urlFR, { headers, signal: AbortSignal.timeout(4000) }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }))
+      ]);
 
-    const data = await tmdbRes.json();
-    const results = data.results || [];
+      const map = new Map();
+      (resUS.results || []).forEach(m => map.set(m.id, m));
+      (resFR.results || []).forEach(m => { if (!map.has(m.id)) map.set(m.id, m); });
+      results = Array.from(map.values());
+    }
 
     // Enrich and filter items (up to 50 candidates per page for rich Stremio rows)
     const enriched = await Promise.all(
@@ -243,7 +247,7 @@ async function handler(req, res) {
           });
 
           // Check gap with theatrical release
-          const theatDateToCheck = isStudioOriginal ? earliestCommercialTheatrical : earliestAnyTheatrical;
+          const theatDateToCheck = earliestCommercialTheatrical;
           if (theatDateToCheck) {
             const theatDate = new Date(theatDateToCheck);
             const digiDate = new Date(digitalReleaseDate || detail.release_date);
@@ -256,7 +260,7 @@ async function handler(req, res) {
               }
             } else {
               // Line 2: VOD & Digital releases (accept direct digital or recent cinema < 120 days)
-              if (diffDays > 120) {
+              if (diffDays > 180) {
                 return null;
               }
             }
