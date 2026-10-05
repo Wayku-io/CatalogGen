@@ -270,14 +270,26 @@ async function loadRow1() {
       url += `&with_watch_providers=${studioState.row1.provider}`;
     }
 
-    const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error('Erreur TMDB Discover');
-    const data = await res.json();
-    const candidates = data.results || [];
+    // Récupérer plusieurs pages TMDB (jusqu'à 3 pages = 60 films découverts) pour avoir un catalogue riche et complet
+    const pagesToFetch = [1, 2, 3];
+    const pagePromises = pagesToFetch.map(p => {
+      const pUrl = url.replace(/&page=\d+/, `&page=${p}`);
+      return fetch(pUrl, { headers }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
+    });
 
-    // Enrichissement et filtrage expert
+    const pageResults = await Promise.all(pagePromises);
+    const candidateMap = new Map();
+    pageResults.forEach(pr => {
+      (pr.results || []).forEach(item => {
+        if (!candidateMap.has(item.id)) candidateMap.set(item.id, item);
+      });
+    });
+
+    const candidates = Array.from(candidateMap.values());
+
+    // Enrichissement et filtrage expert (parallélisé sur tous les candidats)
     const enriched = await Promise.all(
-      candidates.slice(0, 25).map(async (m) => {
+      candidates.map(async (m) => {
         try {
           const detailUrl = `https://api.themoviedb.org/3/movie/${m.id}?${keyParam}append_to_response=release_dates,watch/providers,external_ids,keywords,credits,translations&language=fr-FR`;
           const detailRes = await fetch(detailUrl, { headers });
@@ -409,16 +421,28 @@ async function loadRow2() {
       url += `&with_genres=${studioState.row2.genre}`;
     }
 
-    const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error('Erreur TMDB Discover VOD');
-    const data = await res.json();
-    const candidates = data.results || [];
+    // Récupérer plusieurs pages TMDB (jusqu'à 3 pages = 60 films VOD découverts)
+    const pagesToFetch = [1, 2, 3];
+    const pagePromises = pagesToFetch.map(p => {
+      const pUrl = url.replace(/&page=\d+/, `&page=${p}`);
+      return fetch(pUrl, { headers }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
+    });
+
+    const pageResults = await Promise.all(pagePromises);
+    const candidateMap = new Map();
+    pageResults.forEach(pr => {
+      (pr.results || []).forEach(item => {
+        if (!candidateMap.has(item.id)) candidateMap.set(item.id, item);
+      });
+    });
+
+    const candidates = Array.from(candidateMap.values());
 
     // Récupérer la liste des IDs de la Ligne 1 pour EXCLUSION MUTUELLE
     const line1Ids = new Set(studioState.row1.movies.map(m => m.id));
 
     const enriched = await Promise.all(
-      candidates.slice(0, 30).map(async (m) => {
+      candidates.map(async (m) => {
         try {
           // EXCLUSION MUTUELLE : si déjà présent dans la Ligne 1, on l'écarte
           if (line1Ids.has(m.id)) return null;

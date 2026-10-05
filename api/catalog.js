@@ -128,9 +128,9 @@ async function handler(req, res) {
     const data = await tmdbRes.json();
     const results = data.results || [];
 
-    // Enrich and filter items (20 candidates per page for fast execution)
+    // Enrich and filter items (up to 50 candidates per page for rich Stremio rows)
     const enriched = await Promise.all(
-      results.slice(0, 20).map(async (m) => {
+      results.slice(0, 50).map(async (m) => {
         try {
           const detailUrl = `https://api.themoviedb.org/3/movie/${m.id}?${keyParam}append_to_response=release_dates,watch/providers,external_ids,keywords,credits,translations&language=fr-FR`;
           const detailRes = await fetch(detailUrl, { headers, signal: AbortSignal.timeout(3500) });
