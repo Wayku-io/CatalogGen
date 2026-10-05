@@ -126,33 +126,14 @@
         <!-- Volet de réglages déroulant (Settings Drawer) Ligne 1 -->
         <div class="row-settings-drawer hidden" id="settings-row-1">
           <div class="drawer-header">
-            <h4>⚙️ Paramètres spécifiques : Nouveautés Streaming France (SVOD)</h4>
-            <span class="drawer-notice">Le moteur de nettoyage intelligent (stand-ups, docus, courts-métrages) reste actif par défaut.</span>
+            <h4>⚙️ Filtre Plateforme : Nouveautés Streaming France (SVOD)</h4>
+            <span class="drawer-notice">Filtres automatiques actifs : Exclusivités streaming récentes, sans documentaires, sans stand-up, longs-métrages uniquement. Flux continu classé du plus récent au plus ancien.</span>
           </div>
-          <div class="drawer-grid">
-            <div class="drawer-field">
-              <label>Fenêtre de sortie en France :</label>
-              <select id="r1-timeWindow" class="drawer-select">
-                <option value="30">30 derniers jours</option>
-                <option value="60" selected>60 derniers jours (Recommandé)</option>
-                <option value="90">90 derniers jours</option>
-                <option value="180">6 derniers mois</option>
-              </select>
-            </div>
-
-            <div class="drawer-field">
-              <label>Tolérance sortie ciné / simultanée :</label>
-              <select id="r1-theatricalGap" class="drawer-select">
-                <option value="0">0 jour (Strict exclusif streaming)</option>
-                <option value="2" selected>2 jours max (Tolérance day-and-date)</option>
-                <option value="7">7 jours max</option>
-              </select>
-            </div>
-
-            <div class="drawer-field">
-              <label>Plateforme SVOD spécifique :</label>
+          <div class="drawer-grid" style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
+            <div class="drawer-field" style="flex: 1; min-width: 280px;">
+              <label>Plateforme SVOD :</label>
               <select id="r1-provider" class="drawer-select">
-                <option value="" selected>Toutes (Netflix, Prime, Disney+, Canal+, Apple TV+, Max)</option>
+                <option value="" selected>Toutes les plateformes (Netflix, Prime, Disney+, Canal+, Apple TV+, Max)</option>
                 <option value="8">Netflix uniquement</option>
                 <option value="119">Prime Video uniquement</option>
                 <option value="337">Disney+ uniquement</option>
@@ -162,9 +143,9 @@
               </select>
             </div>
 
-            <div class="drawer-field drawer-field-btn">
+            <div class="drawer-field drawer-field-btn" style="margin-bottom: 0;">
               <button class="btn btn-primary btn-apply-row" data-row="1">
-                Actualiser la Ligne 1
+                Appliquer le filtre
               </button>
             </div>
           </div>
@@ -210,31 +191,11 @@
         <!-- Volet de réglages déroulant (Settings Drawer) Ligne 2 -->
         <div class="row-settings-drawer hidden" id="settings-row-2">
           <div class="drawer-header">
-            <h4>⚙️ Paramètres spécifiques : Nouveautés VOD & Digital Mondiales</h4>
-            <span class="drawer-notice">Exclusion mutuelle activée : aucun film de la Ligne 1 n'apparaîtra dans cette rangée.</span>
+            <h4>⚙️ Filtre Genre : Nouveautés VOD & Digital Mondiales</h4>
+            <span class="drawer-notice">Filtres automatiques actifs : Sorties VOD/Digital avec VF/VOSTFR, exclusion stricte de la Ligne 1, sans documentaires, sans stand-up. Flux continu classé du plus récent au plus ancien.</span>
           </div>
-          <div class="drawer-grid">
-            <div class="drawer-field">
-              <label>Fenêtre de sortie VOD :</label>
-              <select id="r2-timeWindow" class="drawer-select">
-                <option value="30">30 derniers jours</option>
-                <option value="60" selected>60 derniers jours (Recommandé)</option>
-                <option value="90">90 derniers jours</option>
-                <option value="180">6 derniers mois</option>
-              </select>
-            </div>
-
-            <div class="drawer-field">
-              <label>Écart ciné max toléré :</label>
-              <select id="r2-theatricalGap" class="drawer-select">
-                <option value="60">60 jours max</option>
-                <option value="90">90 jours max</option>
-                <option value="120" selected>120 jours max (Standard VOD)</option>
-                <option value="180">180 jours max</option>
-              </select>
-            </div>
-
-            <div class="drawer-field">
+          <div class="drawer-grid" style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
+            <div class="drawer-field" style="flex: 1; min-width: 280px;">
               <label>Genre spécifique :</label>
               <select id="r2-genre" class="drawer-select">
                 <option value="" selected>Tous les genres</option>
@@ -248,9 +209,9 @@
               </select>
             </div>
 
-            <div class="drawer-field drawer-field-btn">
+            <div class="drawer-field drawer-field-btn" style="margin-bottom: 0;">
               <button class="btn btn-primary btn-apply-row" data-row="2">
-                Actualiser la Ligne 2
+                Appliquer le filtre
               </button>
             </div>
           </div>

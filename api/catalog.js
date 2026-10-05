@@ -104,7 +104,7 @@ async function handler(req, res) {
 
     if (isCatalogStreaming) {
       // LINE 1: Pure French Streaming Subscriptions (flatrate)
-      let discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}`;
+      let discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc&page=${page}`;
       const providerKey = selectedExtraOption.toLowerCase();
       if (PROVIDER_IDS[providerKey]) {
         discoverUrl += `&with_watch_providers=${PROVIDER_IDS[providerKey]}`;
@@ -118,8 +118,8 @@ async function handler(req, res) {
       // LINE 2: Worldwide Digital & VOD Releases (Type 4) multi-régions (US + FR)
       const genreKey = selectedExtraOption.toLowerCase();
       const genreParam = GENRE_MAP[genreKey] ? `&with_genres=${GENRE_MAP[genreKey]}` : '';
-      const urlUS = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}${genreParam}`;
-      const urlFR = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=FR&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}${genreParam}`;
+      const urlUS = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc&page=${page}${genreParam}`;
+      const urlFR = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=FR&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc&page=${page}${genreParam}`;
 
       const [resUS, resFR] = await Promise.all([
         fetch(urlUS, { headers, signal: AbortSignal.timeout(4000) }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),

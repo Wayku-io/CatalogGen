@@ -1,12 +1,12 @@
 /**
  * CatalogGen Studio
- * Multi-Catalog Dynamic Engine & Row Settings Controller
+ * Multi-Catalog Dynamic Engine (Flux Continu & Tri Chronologique Stable)
  */
 
-// Mot de passe de protection privée par défaut (configurable via localStorage)
+// Mot de passe de protection privée par défaut
 const DEFAULT_STUDIO_PASS = "wayku2026";
 
-// Constantes pour le filtrage expert (identiques au backend pour fidélité 100%)
+// Constantes pour le filtrage expert
 const STANDUP_PATTERNS = [
   'stand-up comedy', 'stand-up', 'comedy special', 'one-man show', 
   'one-man-show', 'one-woman show', 'one-woman-show', 'stand up', 
@@ -20,22 +20,20 @@ const ORIGINAL_STUDIO_KEYWORDS = [
   'netflix', 'amazon studios', 'amazon content', 'amazon mgm', 'amazon', 'prime video', 'mgm', 'apple', 'disney+', 'disney', 'paramount+', 'paramount', 'hbo', 'warner'
 ];
 
-// État de l'application
+// État de l'application (Flux continu sans limite arbitraire de jours)
 const studioState = {
   apiKey: (typeof localStorage !== 'undefined' ? localStorage.getItem('tmdb_api_key') : '') || '',
   isAuthenticated: false,
   row1: {
-    timeWindow: 60,
-    theatricalGap: 2,
     provider: '',
     movies: [],
+    pagesLoaded: 0,
     loading: false
   },
   row2: {
-    timeWindow: 60,
-    theatricalGap: 180,
     genre: '',
     movies: [],
+    pagesLoaded: 0,
     loading: false
   }
 };
@@ -48,12 +46,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initScrollNav();
   initRowButtons();
   
-  // Démarrer le chargement des catalogues
+  // Démarrer le chargement initial des catalogues
   refreshAllRows();
 });
 
 // =============================================================================
-// 1. SÉCURITÉ & AUTH GATEWAY (Option Simple et Efficace)
+// 1. SÉCURITÉ & AUTH GATEWAY
 // =============================================================================
 function initAuthGate() {
   const authGate = document.getElementById('authGateModal');
@@ -61,38 +59,38 @@ function initAuthGate() {
   const authInput = document.getElementById('authPasswordInput');
   const authError = document.getElementById('authErrorMsg');
 
-  // Vérifier si clé dans l'URL ?key=wayku2026
   const urlParams = new URLSearchParams(window.location.search);
   const keyParam = urlParams.get('key');
-  const savedAuth = typeof localStorage !== 'undefined' ? localStorage.getItem('cataloggen_auth') : null;
+  const savedAuth = typeof localStorage !== 'undefined' ? localStorage.getItem('studio_auth') : null;
 
-  if (keyParam === DEFAULT_STUDIO_PASS || savedAuth === 'true') {
+  if (keyParam === DEFAULT_STUDIO_PASS || savedAuth === 'granted') {
     studioState.isAuthenticated = true;
     if (authGate) authGate.classList.add('hidden');
     return;
   }
 
-  // Sinon afficher le modal d'accès privé
   if (authGate) authGate.classList.remove('hidden');
 
   if (authForm) {
     authForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const enteredPass = authInput.value.trim();
-      if (enteredPass === DEFAULT_STUDIO_PASS) {
+      const pwd = authInput.value.trim();
+      if (pwd === DEFAULT_STUDIO_PASS) {
         studioState.isAuthenticated = true;
-        if (typeof localStorage !== 'undefined') localStorage.setItem('cataloggen_auth', 'true');
+        if (typeof localStorage !== 'undefined') localStorage.setItem('studio_auth', 'granted');
         authGate.classList.add('hidden');
+        authError.classList.add('hidden');
       } else {
         authError.classList.remove('hidden');
         authInput.value = '';
+        authInput.focus();
       }
     });
   }
 }
 
 // =============================================================================
-// 2. MODALS & CLÉ TMDB
+// 2. MODAL CLÉ API TMDB
 // =============================================================================
 function initModals() {
   const topApiKeyBtn = document.getElementById('topApiKeyBtn');
@@ -115,7 +113,7 @@ function initModals() {
       if (globalStatusDot) {
         globalStatusDot.className = 'status-dot offline';
       }
-      if (globalStatusText) globalStatusText.textContent = 'Mode Démo (Pas de clé)';
+      if (globalStatusText) globalStatusText.textContent = 'Clé TMDB requise (Mode démo)';
     }
   }
 
@@ -124,6 +122,7 @@ function initModals() {
   if (topApiKeyBtn && apiKeyModal) {
     topApiKeyBtn.addEventListener('click', () => {
       apiKeyModal.classList.remove('hidden');
+      if (globalApiKeyInput) globalApiKeyInput.focus();
     });
   }
 
@@ -156,19 +155,10 @@ function initModals() {
       refreshAllRows();
     });
   }
-
-  // Modal Film
-  const movieModal = document.getElementById('movieModal');
-  const closeMovieModal = document.getElementById('closeMovieModal');
-  if (closeMovieModal && movieModal) {
-    closeMovieModal.addEventListener('click', () => {
-      movieModal.classList.add('hidden');
-    });
-  }
 }
 
 // =============================================================================
-// 3. ROW SETTINGS TOGGLE (Roue Crantée ⚙️ sur chaque ligne)
+// 3. NAVIGATION DÉROULANTE (Settings Drawers)
 // =============================================================================
 function initRowSettingsToggles() {
   document.querySelectorAll('.row-settings-toggle').forEach(btn => {
@@ -176,116 +166,113 @@ function initRowSettingsToggles() {
       const targetId = btn.getAttribute('data-target');
       const drawer = document.getElementById(targetId);
       if (drawer) {
-        const isClosed = drawer.classList.contains('hidden');
-        drawer.classList.toggle('hidden');
-        btn.classList.toggle('active', isClosed);
+        const isHidden = drawer.classList.contains('hidden');
+        drawer.classList.toggle('hidden', !isHidden);
+        btn.classList.toggle('active', isHidden);
+      }
+    });
+  });
+
+  document.querySelectorAll('.btn-apply-row').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rowNum = btn.getAttribute('data-row');
+      if (rowNum === '1') {
+        studioState.row1.provider = document.getElementById('r1-provider').value;
+        loadRow1(false);
+      } else if (rowNum === '2') {
+        studioState.row2.genre = document.getElementById('r2-genre').value;
+        loadRow2(false);
       }
     });
   });
 }
 
-// =============================================================================
-// 4. NAVIGATION HORIZONTALE TYPE STREMIO (Flèches gauche/droite)
-// =============================================================================
 function initScrollNav() {
   document.querySelectorAll('.nav-arrow').forEach(arrow => {
     arrow.addEventListener('click', () => {
-      const containerId = arrow.getAttribute('data-container');
-      const direction = arrow.getAttribute('data-scroll');
-      const container = document.getElementById(containerId);
+      const targetId = arrow.getAttribute('data-container');
+      const dir = arrow.getAttribute('data-scroll');
+      const container = document.getElementById(targetId);
       if (container) {
-        const scrollAmount = direction === 'left' ? -600 : 600;
+        const scrollAmount = dir === 'left' ? -500 : 500;
         container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
       }
     });
   });
 }
 
-// =============================================================================
-// 5. BOUTONS D'ACTUALISATION PAR LIGNE
-// =============================================================================
 function initRowButtons() {
-  document.querySelectorAll('.btn-apply-row').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const rowNum = btn.getAttribute('data-row');
-      if (rowNum === '1') {
-        const tw = parseInt(document.getElementById('r1-timeWindow').value, 10);
-        const gap = parseInt(document.getElementById('r1-theatricalGap').value, 10);
-        const prov = document.getElementById('r1-provider').value;
-        studioState.row1.timeWindow = tw;
-        studioState.row1.theatricalGap = gap;
-        studioState.row1.provider = prov;
-        loadRow1();
-      } else if (rowNum === '2') {
-        const tw = parseInt(document.getElementById('r2-timeWindow').value, 10);
-        const gap = parseInt(document.getElementById('r2-theatricalGap').value, 10);
-        const genre = document.getElementById('r2-genre').value;
-        studioState.row2.timeWindow = tw;
-        studioState.row2.theatricalGap = gap;
-        studioState.row2.genre = genre;
-        loadRow2();
-      }
+  const refreshAllBtn = document.getElementById('refreshAllBtn');
+  if (refreshAllBtn) {
+    refreshAllBtn.addEventListener('click', () => {
+      refreshAllRows();
     });
-  });
+  }
 }
 
 function refreshAllRows() {
-  loadRow1().then(() => {
-    // La Ligne 2 dépend des films de la Ligne 1 pour l'exclusion mutuelle
-    loadRow2();
+  loadRow1(false).then(() => {
+    loadRow2(false);
   });
 }
 
 // =============================================================================
-// 6. MOTEUR LIGNE 1 : SVOD FRANCE (Exclus Streaming)
+// 6. MOTEUR LIGNE 1 : SVOD FRANCE (Flux Continu & Exclus Streaming)
 // =============================================================================
-async function loadRow1() {
+async function loadRow1(append = false) {
   const track = document.getElementById('track-row-1');
   const counter = document.getElementById('count-row-1');
   if (!track) return;
 
-  track.innerHTML = '<div class="track-loading">Chargement des films SVOD France...</div>';
+  if (studioState.row1.loading) return;
+  studioState.row1.loading = true;
+
+  if (!append) {
+    track.innerHTML = '<div class="track-loading">Chargement des nouveautés SVOD France...</div>';
+    studioState.row1.movies = [];
+    studioState.row1.pagesLoaded = 0;
+  }
 
   if (!studioState.apiKey) {
     renderDemoRow1();
+    studioState.row1.loading = false;
     return;
   }
 
   try {
-    const today = new Date();
-    const startDate = new Date();
-    startDate.setDate(today.getDate() - studioState.row1.timeWindow);
-
-    const startStr = startDate.toISOString().split('T')[0];
-    const endStr = today.toISOString().split('T')[0];
-
     const isBearer = studioState.apiKey.length > 50;
     const headers = isBearer ? { 'Authorization': `Bearer ${studioState.apiKey}` } : {};
     const keyParam = isBearer ? '' : `api_key=${studioState.apiKey}&`;
 
-    let baseUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc`;
+    let baseUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc`;
 
     if (studioState.row1.provider) {
       baseUrl += `&with_watch_providers=${studioState.row1.provider}`;
     }
 
-    const maxPages = studioState.row1.timeWindow >= 180 ? 12 : (studioState.row1.timeWindow >= 90 ? 8 : (studioState.row1.timeWindow >= 60 ? 6 : 4));
-    const pagesToFetch = Array.from({ length: maxPages }, (_, i) => i + 1);
+    const startPage = studioState.row1.pagesLoaded + 1;
+    const pagesToFetch = [startPage, startPage + 1, startPage + 2, startPage + 3];
 
     const pagePromises = pagesToFetch.map(p => {
-      const pUrl = `${baseUrl}&page=${p}`;
-      return fetch(pUrl, { headers }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
+      return fetch(`${baseUrl}&page=${p}`, { headers })
+        .then(r => r.ok ? r.json() : { results: [] })
+        .catch(() => ({ results: [] }));
     });
 
     const pageResults = await Promise.all(pagePromises);
+    const existingIds = new Set(studioState.row1.movies.map(m => m.id));
     const candidateMap = new Map();
+
     pageResults.forEach(pr => {
       (pr.results || []).forEach(item => {
-        if (!candidateMap.has(item.id)) candidateMap.set(item.id, item);
+        if (!existingIds.has(item.id) && !candidateMap.has(item.id)) {
+          candidateMap.set(item.id, item);
+        }
       });
     });
 
     const candidates = Array.from(candidateMap.values());
+    const currentYear = new Date().getFullYear();
 
     const enriched = await Promise.all(
       candidates.map(async (m) => {
@@ -295,9 +282,9 @@ async function loadRow1() {
           if (!detailRes.ok) return null;
           const detail = await detailRes.json();
 
-          // Exclusions documentaires
+          // Exclusions documentaires & téléfilms
           const genres = (detail.genres || []).map(g => g.id);
-          if (genres.includes(99)) return null;
+          if (genres.includes(99) || genres.includes(10770)) return null;
 
           // Exclusions standup / télé-réalité
           const kws = (detail.keywords?.keywords || []).map(k => k.name.toLowerCase());
@@ -317,9 +304,8 @@ async function loadRow1() {
           const lang = (detail.original_language || '').toLowerCase();
           if (lang && !MAIN_LANGUAGES.includes(lang)) return null;
 
-          // Exclusion des films trop anciens (> 1 an)
+          // Exclusion des vieux films (> 1 an d'âge)
           const primaryYear = parseInt((detail.release_date || '').substring(0, 4), 10);
-          const currentYear = new Date().getFullYear();
           if (primaryYear && primaryYear < (currentYear - 1)) {
             return null;
           }
@@ -343,26 +329,19 @@ async function loadRow1() {
             });
           });
 
-          // Écart cinéma commercial (tolérance SVOD)
+          // Écart cinéma commercial : exclusivités streaming (écart <= 7 jours si ciné)
           if (earliestCommercialTheatrical) {
             const tDate = new Date(earliestCommercialTheatrical);
             const dDate = new Date(digitalDate || detail.release_date);
             const diffDays = Math.round((dDate - tDate) / (1000 * 60 * 60 * 24));
-            if (diffDays > studioState.row1.theatricalGap) return null;
+            if (diffDays > 7) return null;
           }
 
+          // Vérification présence réelle en SVOD France
           const providerData = detail['watch/providers']?.results?.FR?.flatrate || [];
           if (providerData.length === 0) return null;
 
           const finalReleaseDate = digitalDate || detail.release_date || '';
-          if (!finalReleaseDate) return null;
-
-          // Filtrage temporel strict sur la date réelle
-          const rDate = new Date(finalReleaseDate);
-          const diffDaysToToday = Math.round((today - rDate) / (1000 * 60 * 60 * 24));
-          if (diffDaysToToday < -2 || diffDaysToToday > studioState.row1.timeWindow) {
-            return null;
-          }
 
           return {
             id: detail.id,
@@ -387,79 +366,93 @@ async function loadRow1() {
       })
     );
 
-    const valid = enriched
+    const validNew = enriched
       .filter(Boolean)
       .sort((a, b) => (b.releaseDate || b.year || '').localeCompare(a.releaseDate || a.year || ''));
 
-    studioState.row1.movies = valid;
-    renderTrack('track-row-1', valid);
-    if (counter) counter.textContent = `${valid.length} films`;
+    if (append) {
+      studioState.row1.movies.push(...validNew);
+    } else {
+      studioState.row1.movies = validNew;
+    }
+
+    studioState.row1.pagesLoaded = pagesToFetch[pagesToFetch.length - 1];
+    renderTrack('track-row-1', studioState.row1.movies, 1);
+    if (counter) counter.textContent = `${studioState.row1.movies.length} films`;
   } catch (err) {
-    track.innerHTML = `<div class="track-loading" style="color: #f87171;">Erreur lors du chargement : ${err.message}</div>`;
+    if (!append) {
+      track.innerHTML = `<div class="track-loading" style="color: #f87171;">Erreur lors du chargement : ${err.message}</div>`;
+    }
+  } finally {
+    studioState.row1.loading = false;
   }
 }
 
 // =============================================================================
-// 7. MOTEUR LIGNE 2 : VOD & DIGITAL MONDIAL (Avec Exclusion Mutuelle Ligne 1)
+// 7. MOTEUR LIGNE 2 : VOD & DIGITAL MONDIAL (Flux Continu & Exclusion Mutuelle)
 // =============================================================================
-async function loadRow2() {
+async function loadRow2(append = false) {
   const track = document.getElementById('track-row-2');
   const counter = document.getElementById('count-row-2');
   if (!track) return;
 
-  track.innerHTML = '<div class="track-loading">Chargement des sorties VOD & Digital...</div>';
+  if (studioState.row2.loading) return;
+  studioState.row2.loading = true;
+
+  if (!append) {
+    track.innerHTML = '<div class="track-loading">Chargement des sorties VOD & Digital...</div>';
+    studioState.row2.movies = [];
+    studioState.row2.pagesLoaded = 0;
+  }
 
   if (!studioState.apiKey) {
     renderDemoRow2();
+    studioState.row2.loading = false;
     return;
   }
 
   try {
-    const today = new Date();
-    const startDate = new Date();
-    startDate.setDate(today.getDate() - studioState.row2.timeWindow);
-
-    const startStr = startDate.toISOString().split('T')[0];
-    const endStr = today.toISOString().split('T')[0];
-
     const isBearer = studioState.apiKey.length > 50;
     const headers = isBearer ? { 'Authorization': `Bearer ${studioState.apiKey}` } : {};
     const keyParam = isBearer ? '' : `api_key=${studioState.apiKey}&`;
 
     const genreParam = studioState.row2.genre ? `&with_genres=${studioState.row2.genre}` : '';
 
-    // Découverte multi-régions (US pour les sorties mondiales WEB-DL + FR pour les sorties VOD locales)
-    const pagesUS = studioState.row2.timeWindow >= 180 ? 12 : (studioState.row2.timeWindow >= 90 ? 8 : (studioState.row2.timeWindow >= 60 ? 6 : 5));
-    const pagesFR = studioState.row2.timeWindow >= 180 ? 8 : (studioState.row2.timeWindow >= 90 ? 6 : (studioState.row2.timeWindow >= 60 ? 4 : 3));
+    const startPage = studioState.row2.pagesLoaded + 1;
+    const pagesUS = [startPage, startPage + 1, startPage + 2, startPage + 3];
+    const pagesFR = [startPage, startPage + 1, startPage + 2];
 
     const queries = [];
-    for (let p = 1; p <= pagesUS; p++) {
-      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${p}${genreParam}`);
-    }
-    for (let p = 1; p <= pagesFR; p++) {
-      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=FR&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${p}${genreParam}`);
-    }
+    pagesUS.forEach(p => {
+      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc&page=${p}${genreParam}`);
+    });
+    pagesFR.forEach(p => {
+      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=FR&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc&page=${p}${genreParam}`);
+    });
 
     const pageResults = await Promise.all(
       queries.map(q => fetch(q, { headers }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })))
     );
 
+    const existingIds = new Set(studioState.row2.movies.map(m => m.id));
+    const line1Ids = new Set(studioState.row1.movies.map(m => m.id));
     const candidateMap = new Map();
+
     pageResults.forEach(pr => {
       (pr.results || []).forEach(item => {
-        if (!candidateMap.has(item.id)) candidateMap.set(item.id, item);
+        if (!existingIds.has(item.id) && !line1Ids.has(item.id) && !candidateMap.has(item.id)) {
+          candidateMap.set(item.id, item);
+        }
       });
     });
 
     const candidates = Array.from(candidateMap.values());
-
-    // Récupérer la liste des IDs de la Ligne 1 pour EXCLUSION MUTUELLE
-    const line1Ids = new Set(studioState.row1.movies.map(m => m.id));
+    const currentYear = new Date().getFullYear();
 
     const enriched = await Promise.all(
       candidates.map(async (m) => {
         try {
-          // EXCLUSION MUTUELLE : si déjà présent dans la Ligne 1, on l'écarte
+          // EXCLUSION MUTUELLE LIGNE 1
           if (line1Ids.has(m.id)) return null;
 
           const detailUrl = `https://api.themoviedb.org/3/movie/${m.id}?${keyParam}append_to_response=release_dates,watch/providers,external_ids,keywords,credits,translations&language=fr-FR`;
@@ -467,9 +460,9 @@ async function loadRow2() {
           if (!detailRes.ok) return null;
           const detail = await detailRes.json();
 
-          // Documentaires
+          // Documentaires & téléfilms
           const genres = (detail.genres || []).map(g => g.id);
-          if (genres.includes(99)) return null;
+          if (genres.includes(99) || genres.includes(10770)) return null;
 
           // Stand-up & télé-réalité
           const kws = (detail.keywords?.keywords || []).map(k => k.name.toLowerCase());
@@ -495,13 +488,12 @@ async function loadRow2() {
             return null;
           }
 
-          // Exclusion des abonnements SVOD France déjà inclus
+          // EXCLUSION MUTUELLE : si déjà disponible en abonnement SVOD France
           const frFlatrate = detail['watch/providers']?.results?.FR?.flatrate || [];
           if (frFlatrate.length > 0) return null;
 
-          // Rejet des films sortis en salles il y a plus de 1 an
+          // Exclusion des vieux films (> 1 an)
           const primaryYear = parseInt((detail.release_date || '').substring(0, 4), 10);
-          const currentYear = new Date().getFullYear();
           if (primaryYear && primaryYear < (currentYear - 1)) {
             return null;
           }
@@ -516,7 +508,7 @@ async function loadRow2() {
               const d = rd.release_date ? rd.release_date.split('T')[0] : null;
               if (!d) return;
 
-              // Sortie cinéma commerciale uniquement (type 3)
+              // Sortie cinéma commerciale uniquement (type 3, pas festival type 2)
               if (rd.type === 3) {
                 if (!earliestCommercialTheatrical || d < earliestCommercialTheatrical) {
                   earliestCommercialTheatrical = d;
@@ -536,23 +528,15 @@ async function loadRow2() {
             });
           });
 
-          // Écart cinéma commercial vs digital (avec la tolérance choisie par l'utilisateur)
+          // Écart cinéma commercial vs digital (standard 180 jours = 6 mois)
           if (earliestCommercialTheatrical && digitalDate) {
             const tDate = new Date(earliestCommercialTheatrical);
             const dDate = new Date(digitalDate);
             const diffDays = Math.round((dDate - tDate) / (1000 * 60 * 60 * 24));
-            if (diffDays > studioState.row2.theatricalGap) return null;
+            if (diffDays > 180) return null;
           }
 
           const finalReleaseDate = digitalDate || detail.release_date || '';
-          if (!finalReleaseDate) return null;
-
-          // Filtrage temporel strict sur la date réelle
-          const rDate = new Date(finalReleaseDate);
-          const diffDaysToToday = Math.round((today - rDate) / (1000 * 60 * 60 * 24));
-          if (diffDaysToToday < -2 || diffDaysToToday > studioState.row2.timeWindow) {
-            return null;
-          }
 
           return {
             id: detail.id,
@@ -575,52 +559,80 @@ async function loadRow2() {
       })
     );
 
-    const valid = enriched
+    const validNew = enriched
       .filter(Boolean)
       .sort((a, b) => (b.releaseDate || b.year || '').localeCompare(a.releaseDate || a.year || ''));
 
-    studioState.row2.movies = valid;
-    renderTrack('track-row-2', valid);
-    if (counter) counter.textContent = `${valid.length} films`;
+    if (append) {
+      studioState.row2.movies.push(...validNew);
+    } else {
+      studioState.row2.movies = validNew;
+    }
+
+    studioState.row2.pagesLoaded = pagesUS[pagesUS.length - 1];
+    renderTrack('track-row-2', studioState.row2.movies, 2);
+    if (counter) counter.textContent = `${studioState.row2.movies.length} films`;
   } catch (err) {
-    track.innerHTML = `<div class="track-loading" style="color: #f87171;">Erreur lors du chargement : ${err.message}</div>`;
+    if (!append) {
+      track.innerHTML = `<div class="track-loading" style="color: #f87171;">Erreur lors du chargement : ${err.message}</div>`;
+    }
+  } finally {
+    studioState.row2.loading = false;
   }
 }
 
+// Fonction globale appelée par la carte "Charger plus"
+window.loadMoreRow = function(rowNum) {
+  if (rowNum === 1) {
+    loadRow1(true);
+  } else if (rowNum === 2) {
+    loadRow2(true);
+  }
+};
+
+// =============================================================================
 // 8. RENDU DES AFFICHES (Stremio Cards) & MODAL FILM
 // =============================================================================
-function renderTrack(containerId, movies) {
+function renderTrack(containerId, movies, rowNum) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
   if (movies.length === 0) {
-    container.innerHTML = '<div class="track-loading">Aucun film ne correspond à ces critères dans cette fenêtre.</div>';
+    container.innerHTML = '<div class="track-loading">Aucun film trouvé avec ces filtres.</div>';
     return;
   }
 
-  container.innerHTML = movies.map(m => `
+  const cardsHtml = movies.map(m => `
     <div class="movie-card" data-id="${m.id}" onclick="openMovieDetail(${m.id})">
       <div class="poster-wrap">
         <img src="${m.poster}" alt="${escapeHtml(m.title)}" loading="lazy">
-        <div class="poster-overlay">
-          ${m.isVod ? '<span class="tag-original" style="background:#0891b2; color:#fff;">VOD / WEB-DL</span>' : '<span class="tag-original">STREAMING</span>'}
-          ${m.providers && m.providers.length > 0 ? `
-            <div class="provider-icon-badge" title="${escapeHtml(m.providers[0].name)}">
-              <img src="${m.providers[0].logo}" alt="${escapeHtml(m.providers[0].name)}">
-            </div>
-          ` : ''}
+        <div class="card-overlay">
+          <span class="rating-pill">★ ${m.rating}</span>
+          <span class="year-pill">${m.year}</span>
         </div>
-        <div class="rating-badge">★ ${m.rating}</div>
+        ${m.isVod ? '<span class="badge-card-vod">VOD</span>' : ''}
       </div>
       <div class="card-info">
-        <div class="card-title" title="${escapeHtml(m.title)}">${escapeHtml(m.title)}</div>
-        <div class="card-meta">
-          <span>${m.year}</span>
-          ${m.runtime ? `<span>• ${m.runtime}</span>` : ''}
+        <h3 class="movie-title" title="${escapeHtml(m.title)}">${escapeHtml(m.title)}</h3>
+        <div class="movie-meta">
+          <span class="meta-year">${m.year}</span>
+          ${m.runtime ? `<span class="meta-runtime">${m.runtime}</span>` : ''}
         </div>
       </div>
     </div>
   `).join('');
+
+  const loadMoreBtnHtml = `
+    <div class="movie-card load-more-card" onclick="loadMoreRow(${rowNum})" title="Charger plus de titres dans le passé">
+      <div class="load-more-inner">
+        <span class="load-more-icon">➕</span>
+        <span class="load-more-title">Charger plus</span>
+        <span class="load-more-sub">Remonter dans le passé</span>
+      </div>
+    </div>
+  `;
+
+  container.innerHTML = cardsHtml + loadMoreBtnHtml;
 }
 
 window.openMovieDetail = function(movieId) {
@@ -629,14 +641,19 @@ window.openMovieDetail = function(movieId) {
   if (!m) return;
 
   const modal = document.getElementById('movieModal');
-  const content = document.getElementById('modalMovieContent');
-  if (!modal || !content) return;
+  const body = document.getElementById('movieModalBody');
+  if (!modal || !body) return;
 
-  content.innerHTML = `
+  const providerLogos = (m.providers || []).map(p => `
+    <div class="provider-pill">
+      ${p.logo ? `<img src="${p.logo}" alt="${escapeHtml(p.name)}">` : ''}
+      <span>${escapeHtml(p.name)}</span>
+    </div>
+  `).join('');
+
+  body.innerHTML = `
     <div style="display: flex; gap: 24px; flex-wrap: wrap;">
-      <div style="flex: 0 0 180px;">
-        <img src="${m.poster}" alt="${escapeHtml(m.title)}" style="width: 100%; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.6);">
-      </div>
+      <img src="${m.poster}" style="width: 180px; border-radius: 12px; object-fit: cover; aspect-ratio: 2/3;" alt="${escapeHtml(m.title)}">
       <div style="flex: 1; min-width: 260px;">
         <h2 style="font-size: 1.5rem; margin-bottom: 4px; color: #fff;">${escapeHtml(m.title)}</h2>
         <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 12px;">
@@ -651,8 +668,14 @@ window.openMovieDetail = function(movieId) {
           ${escapeHtml(m.overview || 'Aucun résumé disponible.')}
         </p>
         <div style="font-size: 0.8rem; color: #64748b; font-family: monospace;">
-          ID IMDB / Stremio : <strong>${m.imdbId}</strong> (ID TMDB : ${m.id})
+          IMDb ID : ${m.imdbId} • TMDB ID : ${m.id}
         </div>
+        ${providerLogos ? `
+          <div style="margin-top: 16px;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; margin-bottom: 8px;">Disponible sur :</div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">${providerLogos}</div>
+          </div>
+        ` : ''}
       </div>
     </div>
   `;
@@ -660,62 +683,34 @@ window.openMovieDetail = function(movieId) {
   modal.classList.remove('hidden');
 };
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const closeMovieModal = document.getElementById('closeMovieModal');
+if (closeMovieModal) {
+  closeMovieModal.addEventListener('click', () => {
+    const modal = document.getElementById('movieModal');
+    if (modal) modal.classList.add('hidden');
+  });
 }
 
-// Fallback Démo instantané
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function renderDemoRow1() {
-  const demoList = [
-    {
-      id: 1159311,
-      title: "The Mastermind (Netflix Original)",
-      originalTitle: "The Mastermind",
-      poster: "https://image.tmdb.org/t/p/w500/7x09eBq8yZ30N9QeM0YlG0u.jpg",
-      year: "2026",
-      rating: "7.4",
-      runtime: "114 min",
-      overview: "Un thriller palpitant produit en exclusivité pour Netflix. Un braquage millimétré vire à la confrontation psychologique.",
-      providers: [{ name: "Netflix", logo: "https://image.tmdb.org/t/p/original/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg" }],
-      releaseDate: "2026-09-18"
-    },
-    {
-      id: 1022789,
-      title: "Echoes of Silence (Apple Original)",
-      originalTitle: "Echoes of Silence",
-      poster: "https://image.tmdb.org/t/p/w500/uXDwYmb9G9v3hN5lP9Q.jpg",
-      year: "2026",
-      rating: "8.1",
-      runtime: "108 min",
-      overview: "Drame intimiste et captivant sur un pianiste virtuose confronté à la perte soudaine de son ouïe.",
-      providers: [{ name: "Apple TV+", logo: "https://image.tmdb.org/t/p/original/peURlLlr8jggOwK53fJ5wdQl05y.jpg" }],
-      releaseDate: "2026-09-26"
-    }
-  ];
-  studioState.row1.movies = demoList;
-  renderTrack('track-row-1', demoList);
-  const counter = document.getElementById('count-row-1');
-  if (counter) counter.textContent = `${demoList.length} films (Mode Démo)`;
+  const track = document.getElementById('track-row-1');
+  if (track) {
+    track.innerHTML = '<div class="track-loading">Mode démo : Saisis ta clé TMDB en haut à droite pour afficher les nouveautés réelles en temps réel.</div>';
+  }
 }
 
 function renderDemoRow2() {
-  const demoList = [
-    {
-      id: 934052,
-      title: "Deep Current (Sortie WEB-DL VOD)",
-      originalTitle: "Deep Current",
-      poster: "https://placehold.co/300x450/0f172a/38bdf8?text=VOD+Worldwide",
-      year: "2026",
-      rating: "6.9",
-      runtime: "102 min",
-      overview: "Sortie digitale mondiale avec piste audio et sous-titres français disponibles.",
-      isVod: true,
-      releaseDate: "2026-09-15"
-    }
-  ];
-  studioState.row2.movies = demoList;
-  renderTrack('track-row-2', demoList);
-  const counter = document.getElementById('count-row-2');
-  if (counter) counter.textContent = `${demoList.length} films (Mode Démo)`;
+  const track = document.getElementById('track-row-2');
+  if (track) {
+    track.innerHTML = '<div class="track-loading">Mode démo : Saisis ta clé TMDB en haut à droite pour afficher les nouveautés VOD réelles.</div>';
+  }
 }
