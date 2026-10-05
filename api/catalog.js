@@ -104,7 +104,7 @@ async function handler(req, res) {
 
     if (isCatalogStreaming) {
       // LINE 1: Pure French Streaming Subscriptions (flatrate)
-      let discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc&page=${page}`;
+      let discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}`;
       const providerKey = selectedExtraOption.toLowerCase();
       if (PROVIDER_IDS[providerKey]) {
         discoverUrl += `&with_watch_providers=${PROVIDER_IDS[providerKey]}`;
@@ -276,6 +276,7 @@ async function handler(req, res) {
             : (detail.tagline ? `${detail.tagline} • Sortie VOD & Digital (Piste/Traduction FR).` : "Sortie VOD & Digital (Achat / Location - Piste ou sous-titres FR disponibles).");
 
           const finalDate = digitalReleaseDate || detail.release_date || '1970-01-01';
+          if (finalDate > endStr) return null;
 
           return {
             id: imdbId,

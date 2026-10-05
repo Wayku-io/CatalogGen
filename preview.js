@@ -244,14 +244,16 @@ async function loadRow1(append = false) {
     const headers = isBearer ? { 'Authorization': `Bearer ${studioState.apiKey}` } : {};
     const keyParam = isBearer ? '' : `api_key=${studioState.apiKey}&`;
 
-    let baseUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc`;
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    let baseUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&watch_region=FR&with_watch_monetization_types=flatrate&with_release_type=4&without_genres=99|10770&release_date.lte=${todayStr}&sort_by=release_date.desc`;
 
     if (studioState.row1.provider) {
       baseUrl += `&with_watch_providers=${studioState.row1.provider}`;
     }
 
     const startPage = studioState.row1.pagesLoaded + 1;
-    const pagesToFetch = [startPage, startPage + 1, startPage + 2, startPage + 3];
+    const pagesToFetch = [startPage, startPage + 1, startPage + 2, startPage + 3, startPage + 4];
 
     const pagePromises = pagesToFetch.map(p => {
       return fetch(`${baseUrl}&page=${p}`, { headers })
@@ -342,6 +344,7 @@ async function loadRow1(append = false) {
           if (providerData.length === 0) return null;
 
           const finalReleaseDate = digitalDate || detail.release_date || '';
+          if (!finalReleaseDate || finalReleaseDate > todayStr) return null;
 
           return {
             id: detail.id,
@@ -418,16 +421,18 @@ async function loadRow2(append = false) {
 
     const genreParam = studioState.row2.genre ? `&with_genres=${studioState.row2.genre}` : '';
 
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
     const startPage = studioState.row2.pagesLoaded + 1;
-    const pagesUS = [startPage, startPage + 1, startPage + 2, startPage + 3];
-    const pagesFR = [startPage, startPage + 1, startPage + 2];
+    const pagesUS = [startPage, startPage + 1, startPage + 2, startPage + 3, startPage + 4];
+    const pagesFR = [startPage, startPage + 1, startPage + 2, startPage + 3];
 
     const queries = [];
     pagesUS.forEach(p => {
-      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc&page=${p}${genreParam}`);
+      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.lte=${todayStr}&sort_by=release_date.desc&page=${p}${genreParam}`);
     });
     pagesFR.forEach(p => {
-      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=FR&with_release_type=4&without_genres=99|10770&sort_by=release_date.desc&page=${p}${genreParam}`);
+      queries.push(`https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=FR&with_release_type=4&without_genres=99|10770&release_date.lte=${todayStr}&sort_by=release_date.desc&page=${p}${genreParam}`);
     });
 
     const pageResults = await Promise.all(
