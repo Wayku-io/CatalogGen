@@ -112,7 +112,7 @@ async function handler(req, res) {
       }
     } else {
       // LINE 2: Worldwide Digital & VOD Releases (Type 4)
-      discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=popularity.desc&page=${page}`;
+      discoverUrl = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=${page}`;
 
       const genreKey = selectedExtraOption.toLowerCase();
       if (GENRE_MAP[genreKey]) {

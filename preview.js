@@ -270,8 +270,11 @@ async function loadRow1() {
       url += `&with_watch_providers=${studioState.row1.provider}`;
     }
 
-    // Récupérer plusieurs pages TMDB (jusqu'à 3 pages = 60 films découverts) pour avoir un catalogue riche et complet
-    const pagesToFetch = [1, 2, 3];
+    // Calculer le nombre de pages à scanner selon la fenêtre temporelle demandée :
+    // 30 jours = 3 pages (60 films), 60 jours = 5 pages (100 films), 90 jours = 7 pages (140 films), 180 jours = 12 pages (240 films)
+    const maxPages = studioState.row1.timeWindow >= 180 ? 12 : (studioState.row1.timeWindow >= 90 ? 7 : (studioState.row1.timeWindow >= 60 ? 5 : 3));
+    const pagesToFetch = Array.from({ length: maxPages }, (_, i) => i + 1);
+
     const pagePromises = pagesToFetch.map(p => {
       const pUrl = url.replace(/&page=\d+/, `&page=${p}`);
       return fetch(pUrl, { headers }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
@@ -415,14 +418,17 @@ async function loadRow2() {
     const headers = isBearer ? { 'Authorization': `Bearer ${studioState.apiKey}` } : {};
     const keyParam = isBearer ? '' : `api_key=${studioState.apiKey}&`;
 
-    let url = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=popularity.desc&page=1`;
+    let url = `https://api.themoviedb.org/3/discover/movie?${keyParam}language=fr-FR&region=US&with_release_type=4&without_genres=99|10770&release_date.gte=${startStr}&release_date.lte=${endStr}&sort_by=release_date.desc&page=1`;
 
     if (studioState.row2.genre) {
       url += `&with_genres=${studioState.row2.genre}`;
     }
 
-    // Récupérer plusieurs pages TMDB (jusqu'à 3 pages = 60 films VOD découverts)
-    const pagesToFetch = [1, 2, 3];
+    // Calculer le nombre de pages à scanner selon la fenêtre temporelle demandée :
+    // 30 jours = 4 pages (80 films), 60 jours = 7 pages (140 films), 90 jours = 10 pages (200 films), 180 jours = 15 pages (300 films)
+    const maxPages = studioState.row2.timeWindow >= 180 ? 15 : (studioState.row2.timeWindow >= 90 ? 10 : (studioState.row2.timeWindow >= 60 ? 7 : 4));
+    const pagesToFetch = Array.from({ length: maxPages }, (_, i) => i + 1);
+
     const pagePromises = pagesToFetch.map(p => {
       const pUrl = url.replace(/&page=\d+/, `&page=${p}`);
       return fetch(pUrl, { headers }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
