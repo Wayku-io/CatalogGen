@@ -120,7 +120,7 @@ async function handler(req, res) {
       }
     }
 
-    const tmdbRes = await fetch(discoverUrl, { headers });
+    const tmdbRes = await fetch(discoverUrl, { headers, signal: AbortSignal.timeout(4000) });
     if (!tmdbRes.ok) {
       return sendResponse(res, 200, { metas: [] });
     }
@@ -133,7 +133,7 @@ async function handler(req, res) {
       results.slice(0, 20).map(async (m) => {
         try {
           const detailUrl = `https://api.themoviedb.org/3/movie/${m.id}?${keyParam}append_to_response=release_dates,watch/providers,external_ids,keywords,credits,translations&language=fr-FR`;
-          const detailRes = await fetch(detailUrl, { headers });
+          const detailRes = await fetch(detailUrl, { headers, signal: AbortSignal.timeout(3500) });
           if (!detailRes.ok) return null;
           const detail = await detailRes.json();
 
