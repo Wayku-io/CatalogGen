@@ -22,5 +22,6 @@ jobs:
       - name: Run MDBList Refresh
         env:
           MDBLIST_COOKIE: ${{ secrets.MDBLIST_COOKIE }}
-          MDBLIST_IDS: ${{ vars.MDBLIST_IDS || '168436' }}
+          MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
+          MDBLIST_IDS: ${{ vars.MDBLIST_IDS }}
         run: node scripts/update-mdblist.js
