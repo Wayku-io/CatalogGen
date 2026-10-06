@@ -3,7 +3,8 @@
   "version": "2.0.0",
   "description": "Addon Stremio dynamique pour les nouveautés streaming et VOD avec l'API TMDB.",
   "scripts": {
-    "dev": "node scripts/local-server.js"
+    "dev": "node scripts/local-server.js",
+    "refresh-lists": "node scripts/update-mdblist.js"
   },
   "keywords": [
     "stremio",
