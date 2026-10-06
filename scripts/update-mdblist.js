@@ -1,15 +1,15 @@
 /**
  * Script de rafraîchissement intelligent des listes MDBList
- * Détecte automatiquement les listes et gère les dépendances en 2 voyages :
- * 1. Voyage 1 : Actualisation des listes sources (tag "Used by" ou listes mères)
- * 2. Pause (3 minutes) pour laisser MDBList recalculer les sources
- * 3. Voyage 2 : Actualisation des autres listes (dont les listes dépendantes)
+ * Détecte automatiquement les listes et gère les dépendances en 2 voyages optimisés :
+ * 1. Voyage 1 : Actualisation des listes sources (marquées "Used by")
+ * 2. Attente intelligente (Polling API) : surveille en direct quand TOUTES les sources sont prêtes
+ * 3. Voyage 2 : Dès que c'est prêt, actualisation immédiate des autres listes (gain de temps maximal)
  */
 
 const cookie = process.env.MDBLIST_COOKIE;
 const apiKey = process.env.MDBLIST_API_KEY;
 const manualListIds = process.env.MDBLIST_IDS;
-const waitSecondsSources = parseInt(process.env.MDBLIST_WAIT_SECONDS || '180', 10); // 3 minutes par défaut
+const maxWaitSeconds = parseInt(process.env.MDBLIST_WAIT_SECONDS || '120', 10); // 2 min max de sécurité
 
 if (!cookie) {
   console.error('❌ ERREUR : La variable MDBLIST_COOKIE est absente.');
@@ -34,11 +34,11 @@ const defaultHeaders = {
 };
 
 /**
- * Pause avec compte à rebours visuel
+ * Pause avec compte à rebours visuel (utilisée en fallback)
  */
 async function countdownSleep(seconds) {
-  console.log(`\n⏳ Début de la pause de ${seconds} secondes (${Math.round(seconds / 60)} minutes)...`);
-  const interval = 30;
+  console.log(`\n⏳ Pause fixe de ${seconds} secondes...`);
+  const interval = 20;
   let remaining = seconds;
 
   while (remaining > 0) {
@@ -46,14 +46,79 @@ async function countdownSleep(seconds) {
     await sleep(waitTime * 1000);
     remaining -= waitTime;
     if (remaining > 0) {
-      console.log(`   ⏳ Encore ${remaining}s d'attente (MDBList compile les listes en arrière-plan)...`);
+      console.log(`   ⏳ Encore ${remaining}s d'attente...`);
     }
   }
-  console.log('✅ Temps d\'attente écoulé, reprise des mises à jour !\n');
+  console.log('✅ Temps d\'attente écoulé !\n');
 }
 
 /**
- * Récupération via l'API officielle MDBList (Recommandé, jamais bloqué par Cloudflare)
+ * Récupère le timestamp / statut actuel d'une liste via l'API
+ */
+async function getListTimestamp(listId, key) {
+  try {
+    const res = await fetch(`https://api.mdblist.com/lists/${listId}/?apikey=${key}`);
+    if (res.ok) {
+      const data = await res.json();
+      return String(data.updated || data.last_updated || data.updated_at || data.items || '');
+    }
+  } catch (e) {
+    // Silencieux
+  }
+  return '';
+}
+
+/**
+ * Surveillance active de la synchronisation (Polling)
+ * Surveille que TOUTES les listes sources ont fini leur synchronisation
+ */
+async function waitForAllSourcesReady(sourceLists, initialTimestamps, key) {
+  if (!key) {
+    console.log(`ℹ️ Pas de clé API pour le polling : utilisation du délai de sécurité fixe.`);
+    await countdownSleep(Math.min(90, maxWaitSeconds));
+    return;
+  }
+
+  console.log(`\n========================================================================`);
+  console.log(`🔍 SURVEILLANCE EN DIRECT : Attente que MDBList compile ${sourceLists.length} source(s)...`);
+  console.log(`========================================================================`);
+
+  const pollIntervalSec = 6;
+  let elapsed = 0;
+  const readyListIds = new Set();
+
+  while (elapsed < maxWaitSeconds) {
+    await sleep(pollIntervalSec * 1000);
+    elapsed += pollIntervalSec;
+
+    for (const list of sourceLists) {
+      if (readyListIds.has(list.id)) continue;
+
+      const currentTs = await getListTimestamp(list.id, key);
+      const initialTs = initialTimestamps.get(list.id);
+
+      // Si le timestamp a changé ou est rafraîchi
+      if (currentTs && initialTs && currentTs !== initialTs) {
+        readyListIds.add(list.id);
+        console.log(`   ✨ [Prêt en ${elapsed}s] "${list.name}" (#${list.id}) a fini d'être compilée !`);
+      }
+    }
+
+    // Si TOUTES les listes sources sont prêtes, on enchaîne immédiatement !
+    if (readyListIds.size === sourceLists.length) {
+      console.log(`\n🎉 SUCCÈS : Toutes les listes sources (${readyListIds.size}/${sourceLists.length}) sont prêtes en ${elapsed}s !`);
+      console.log(`⚡ Lancement immédiat du Voyage 2 sans attendre.\n`);
+      return;
+    }
+
+    console.log(`   ⏳ Progression : ${readyListIds.size}/${sourceLists.length} liste(s) prête(s) (${elapsed}s écoulées)...`);
+  }
+
+  console.log(`\n⏰ Délai de sécurité atteint (${maxWaitSeconds}s). Poursuite du Voyage 2 par précaution.\n`);
+}
+
+/**
+ * Récupération via l'API officielle MDBList
  */
 async function fetchListsViaApiKey(key) {
   try {
@@ -89,9 +154,7 @@ async function fetchListsViaApiKey(key) {
 
     console.log(`✅ ${rawLists.length} liste(s) récupérée(s) via l'API officielle.`);
 
-    // Analyse des dépendances (identifier les listes sources vs dépendantes)
-    // 1. Soit en interrogeant les détails de chaque liste pour voir les exclusions
-    // 2. Soit par détection des listes d'exclusion / mots-clés
+    // Détection automatique des dépendances entre listes
     const sourceIds = new Set();
     for (const list of rawLists) {
       try {
@@ -99,7 +162,6 @@ async function fetchListsViaApiKey(key) {
         if (detailRes.ok) {
           const detail = await detailRes.json();
           const detailStr = JSON.stringify(detail);
-          // Chercher si cette liste exclut une autre liste appartenant à l'utilisateur
           for (const other of rawLists) {
             if (other.id !== list.id && detailStr.includes(other.id)) {
               sourceIds.add(other.id);
@@ -108,18 +170,18 @@ async function fetchListsViaApiKey(key) {
           }
         }
       } catch (e) {
-        // Ignorer silencieusement si le détail n'est pas accessible
+        // Silencieux
       }
     }
 
-    // Appliquer le tag source
+    // Appliquer le statut isSource
     for (const list of rawLists) {
       if (sourceIds.has(list.id)) {
         list.isSource = true;
       }
     }
 
-    // Si aucune dépendance trouvée par l'API mais qu'une liste s'appelle "Nouvelles sorties"
+    // Fallback par mot-clé si nécessaire
     if (sourceIds.size === 0) {
       for (const list of rawLists) {
         if (/nouvelles?\s+sorties/i.test(list.name) || /new\s+shows/i.test(list.name)) {
@@ -137,7 +199,7 @@ async function fetchListsViaApiKey(key) {
 }
 
 /**
- * Récupération automatique via la page web /mylists/ avec le cookie de session
+ * Récupération via la page web /mylists/ (fallback sans API key)
  */
 async function fetchListsViaWebPage() {
   try {
@@ -151,37 +213,19 @@ async function fetchListsViaWebPage() {
       }
     });
 
-    const status = res.status;
     const html = await res.text();
+    if (!res.ok) return null;
 
-    if (!res.ok) {
-      console.warn(`⚠️ La page mylists a renvoyé HTTP ${status} (probablement bloqué par Cloudflare).`);
-      return null;
-    }
-
-    if (html.includes('Sign in') || html.includes('login') && !html.includes('logout')) {
-      console.warn('⚠️ La page mylists a redirigé vers la page de connexion (Cookie de session invalide ou expiré).');
-      return null;
-    }
-
-    // Détecter tous les boutons d'actualisation et leurs positions
     const updateRegex = /list_notification\/\?listid=(\d+)/g;
     const matches = [];
     let match;
 
     while ((match = updateRegex.exec(html)) !== null) {
-      matches.push({
-        id: match[1],
-        index: match.index
-      });
+      matches.push({ id: match[1], index: match.index });
     }
 
-    if (matches.length === 0) {
-      console.warn('⚠️ Aucun bouton list_notification trouvé dans le HTML.');
-      return null;
-    }
+    if (matches.length === 0) return null;
 
-    // Dédoublonnage
     const uniqueMatches = [];
     const seenIds = new Set();
     for (const m of matches) {
@@ -197,28 +241,20 @@ async function fetchListsViaWebPage() {
       const start = Math.max(0, current.index - 2500);
       const end = Math.min(html.length, current.index + 2500);
       const chunk = html.substring(start, end);
-
       const isSource = /used by the following dynamic lists|used by/i.test(chunk);
 
       let name = `Liste #${current.id}`;
       const nameMatch = chunk.match(/<a[^>]*href="\/lists\/[^"]*"[^>]*>([^<]+)<\/a>/i) ||
                         chunk.match(/class="[^"]*header[^"]*"[^>]*>([^<]+)</i);
-      if (nameMatch && nameMatch[1].trim()) {
-        name = nameMatch[1].trim();
-      }
+      if (nameMatch && nameMatch[1].trim()) name = nameMatch[1].trim();
 
-      detectedLists.push({
-        id: current.id,
-        name,
-        isSource
-      });
+      detectedLists.push({ id: current.id, name, isSource });
     }
 
     return detectedLists;
   } catch (err) {
-    console.warn('⚠️ Erreur lors de l\'analyse de la page web:', err.message);
+    return null;
   }
-  return null;
 }
 
 /**
@@ -243,7 +279,7 @@ async function updateList(item) {
     } else if (status === 401 || status === 403) {
       console.error(`   ⚠️ [HTTP ${status}] Authentification refusée. Cookie expiré.`);
     } else if (status === 429) {
-      console.warn(`   ⏳ [HTTP 429] Rate limit atteint. Trop de requêtes.`);
+      console.warn(`   ⏳ [HTTP 429] Rate limit atteint.`);
     } else {
       console.log(`   ℹ️ [HTTP ${status}] Statut : ${text.substring(0, 150)}`);
     }
@@ -257,29 +293,23 @@ async function run() {
 
   let lists = null;
 
-  // 1. Priorité à l'API officielle si MDBLIST_API_KEY est renseignée
   if (apiKey) {
     lists = await fetchListsViaApiKey(apiKey);
   }
 
-  // 2. Sinon analyse de la page web mylists
   if (!lists || lists.length === 0) {
     lists = await fetchListsViaWebPage();
   }
 
-  // 3. Fallback sur les IDs manuels ou liste par défaut
   if (!lists || lists.length === 0) {
     if (manualListIds) {
       console.log('ℹ️ Utilisation des IDs configurés dans MDBLIST_IDS.');
       lists = manualListIds.split(',').map(id => ({ id: id.trim(), name: `Liste #${id.trim()}`, isSource: false }));
     } else {
-      console.log('⚠️ Aucune liste détectée automatiquement.');
-      console.log('👉 ASTUCE : Ajoutez votre secret GitHub MDBLIST_API_KEY pour une détection infaillible de vos 5 listes !');
       lists = [{ id: '168436', name: 'Liste par défaut (#168436)', isSource: false }];
     }
   }
 
-  // Séparation en deux groupes : Sources ("Used by") vs Autres
   const sourceLists = lists.filter(l => l.isSource);
   const otherLists = lists.filter(l => !l.isSource);
 
@@ -289,17 +319,23 @@ async function run() {
 
   // --- VOYAGE 1 : Les listes sources ---
   if (sourceLists.length > 0) {
+    // 1. Relever les timestamps initiaux AVANT le lancement pour le polling
+    const initialTimestamps = new Map();
+    if (apiKey) {
+      for (const s of sourceLists) {
+        const ts = await getListTimestamp(s.id, apiKey);
+        initialTimestamps.set(s.id, ts);
+      }
+    }
+
     console.log(`========== 🚀 VOYAGE 1/2 : Mise à jour des ${sourceLists.length} liste(s) source(s) ==========`);
     for (let i = 0; i < sourceLists.length; i++) {
       await updateList(sourceLists[i]);
       if (i < sourceLists.length - 1) await sleep(3000);
     }
 
-    console.log(`\n========================================================================`);
-    console.log(`⏸️  Les listes sources ont été déclenchées.`);
-    console.log(`    Pause de ${waitSecondsSources}s (3 min) pour que MDBList les calcule avant le voyage 2...`);
-    console.log(`========================================================================`);
-    await countdownSleep(waitSecondsSources);
+    // 2. Attente intelligente (dès que TOUTES les sources sont prêtes, on enchaîne !)
+    await waitForAllSourcesReady(sourceLists, initialTimestamps, apiKey);
   }
 
   // --- VOYAGE 2 : Les autres listes ---
