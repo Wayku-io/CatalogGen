@@ -1,17 +1,17 @@
 {
-  "name": "stremio-streaming-france-addon",
-  "version": "2.0.0",
-  "description": "Addon Stremio dynamique pour les nouveautés streaming et VOD avec l'API TMDB.",
+  "name": "mdblist-auto-refresh",
+  "version": "1.0.0",
+  "description": "Automatisation du rafraîchissement des listes dynamiques MDBList via GitHub Actions.",
   "scripts": {
-    "dev": "node scripts/local-server.js",
-    "refresh-lists": "node scripts/update-mdblist.js"
+    "start": "node scripts/update-mdblist.js",
+    "refresh": "node scripts/update-mdblist.js"
   },
   "keywords": [
+    "mdblist",
     "stremio",
-    "stremio-addon",
-    "tmdb",
-    "streaming",
-    "france"
+    "trakt",
+    "automation",
+    "github-actions"
   ],
   "author": "Wayku",
   "license": "MIT"
