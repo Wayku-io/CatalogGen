@@ -2,8 +2,8 @@ name: MDBList Auto Refresh
 
 on:
   schedule:
-    # Exécution toutes les 2 heures (à la minute 0)
-    - cron: '0 */2 * * *'
+    # Exécution toutes les 2 heures à la minute 17 (minute creuse pour éviter la congestion des serveurs GitHub)
+    - cron: '17 */2 * * *'
   # Permet de lancer le rafraîchissement manuellement depuis l'onglet Actions sur GitHub
   workflow_dispatch:
 
